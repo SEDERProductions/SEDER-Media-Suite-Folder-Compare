@@ -74,8 +74,14 @@ pub fn report_txt(report: &CompareReport, title: &str) -> String {
             FileStatus::OnlyInA => "Only in A",
             FileStatus::OnlyInB => "Only in B",
         };
-        let size_a = row.size_a.map(|s| s.to_string()).unwrap_or_else(|| "—".to_string());
-        let size_b = row.size_b.map(|s| s.to_string()).unwrap_or_else(|| "—".to_string());
+        let size_a = row
+            .size_a
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "—".to_string());
+        let size_b = row
+            .size_b
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "—".to_string());
         out.push_str(&format!(
             "{}\t{}\t{}\t{}\n",
             status, row.relative_path, size_a, size_b
