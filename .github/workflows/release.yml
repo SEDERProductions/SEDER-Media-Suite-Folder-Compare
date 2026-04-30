@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            runner: macos-latest
+            artifact: seder-folder-compare-${{ github.ref_name }}-macos.zip
+          - name: Windows
+            runner: windows-latest
+            artifact: seder-folder-compare-${{ github.ref_name }}-windows-x64.zip
+          - name: Linux
+            runner: ubuntu-22.04
+            artifact: seder-folder-compare-${{ github.ref_name }}-linux-x86_64.AppImage
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.3"
+          cache: true
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build libfuse2 desktop-file-utils patchelf
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja
+
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ninja cmake -y
+
+      - name: Configure
+        run: cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/qt
+
+      - name: Run Qt tests
+        run: ctest --test-dir build/qt --output-on-failure
+
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        run: |
+          macdeployqt build/qt/seder-folder-compare-qt.app -qmldir=qt/qml
+          ditto -c -k --keepParent build/qt/seder-folder-compare-qt.app "${{ matrix.artifact }}"
+
+      - name: Package Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/windows
+          Copy-Item build/qt/seder-folder-compare-qt.exe dist/windows/
+          windeployqt --qmldir qt/qml dist/windows/seder-folder-compare-qt.exe
+          Compress-Archive -Path dist/windows/* -DestinationPath "${{ matrix.artifact }}"
+
+      - name: Package Linux AppImage
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/scalable/apps
+          cp build/qt/seder-folder-compare-qt AppDir/usr/bin/seder-folder-compare
+          cp packaging/linux/com.sederproductions.foldercompare.desktop AppDir/usr/share/applications/
+          cp assets/icon.svg AppDir/usr/share/icons/hicolor/scalable/apps/com.sederproductions.foldercompare.svg
+          curl -L -o linuxdeploy-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -L -o linuxdeploy-plugin-qt-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+          export QML_SOURCES_PATHS=qt/qml
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage
+          built_appimage="$(find . -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -print -quit)"
+          mv "$built_appimage" "${{ matrix.artifact }}"
+
+      - name: Create checksum
+        shell: bash
+        run: |
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
+          fi
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Collect checksums
+        run: |
+          find dist -name "*.sha256" -print0 | sort -z | xargs -0 cat > SHA256SUMS.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
+          generate_release_notes: true
+          files: |
+            dist/**/*.zip
+            dist/**/*.AppImage
+            SHA256SUMS.txt

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SEDER Media Suite Folder Compare
+Comment=Compare folders locally for post-production workflows
+Exec=seder-folder-compare
+Icon=com.sederproductions.foldercompare
+Categories=Utility;AudioVideo;
+Terminal=false
+

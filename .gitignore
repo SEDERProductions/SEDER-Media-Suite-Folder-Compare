@@ -1,0 +1,44 @@
+# Rust
+/target/
+
+# CMake / Qt
+/build/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.cmake.user
+*.qmlc
+*.jsc
+
+# Generated apps and packages
+*.app/
+*.AppImage
+*.dmg
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.7z
+*.dll
+*.dylib
+*.so
+*.a
+*.lib
+
+# Local reports and logs
+*.log
+*.tmp
+*.bak
+seder-folder-compare-report.*
+SHA256SUMS.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
