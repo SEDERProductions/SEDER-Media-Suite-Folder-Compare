@@ -48,10 +48,19 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Qt
+      - name: Install Qt (Linux/macOS)
+        if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.7.3"
+          cache: true
+
+      - name: Install Qt (Windows MSVC 2022)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.3"
+          arch: "win64_msvc2022_64"
           cache: true
 
       - name: Install Linux build dependencies
@@ -77,4 +86,3 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build/qt --output-on-failure
-
