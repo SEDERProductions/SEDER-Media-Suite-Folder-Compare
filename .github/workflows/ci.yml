@@ -52,16 +52,22 @@ jobs:
         if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.3"
+          version: "6.7.*"
+          target: desktop
+          install-deps: true
           cache: true
+          cache-key-prefix: install-qt-action-v2
 
       - name: Install Qt (Windows MSVC 2022)
         if: runner.os == 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.3"
+          version: "6.7.*"
+          target: desktop
           arch: "win64_msvc2022_64"
+          install-deps: true
           cache: true
+          cache-key-prefix: install-qt-action-v2
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -79,7 +85,7 @@ jobs:
         run: choco install ninja cmake -y
 
       - name: Configure
-        run: cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
 
       - name: Build
         run: cmake --build build/qt

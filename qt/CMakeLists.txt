@@ -52,7 +52,7 @@ qt_add_resources(APP_RESOURCES app_resources
     PREFIX "/"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
     FILES
-        "../assets/icon.svg"
+        "assets/icon.svg"
 )
 
 set(SEDER_APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.icns")
