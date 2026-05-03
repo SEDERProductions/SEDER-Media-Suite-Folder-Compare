@@ -28,15 +28,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Qt
+      - name: Install Qt (Linux/macOS)
+        if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.7.3"
+          cache: true
+
+      - name: Install Qt (Windows MSVC 2022)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.3"
+          arch: "win64_msvc2022_64"
           cache: true
 
       - name: Install Linux build dependencies
@@ -131,7 +140,7 @@ jobs:
           fi
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -145,7 +154,7 @@ jobs:
     needs: build
     steps:
       - name: Download packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
@@ -154,7 +163,7 @@ jobs:
           find dist -name "*.sha256" -print0 | sort -z | xargs -0 cat > SHA256SUMS.txt
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') }}
