@@ -9,6 +9,9 @@ repository = "https://github.com/sederproductions/seder-folder-compare"
 keywords = ["folder-compare", "media", "qt", "rust", "post-production"]
 categories = ["filesystem", "gui", "multimedia"]
 
+[workspace]
+resolver = "2"
+
 [lib]
 name = "seder_folder_compare"
 crate-type = ["rlib", "staticlib", "cdylib"]
@@ -21,3 +24,10 @@ walkdir = "2.5"
 
 [dev-dependencies]
 tempfile = "3.13"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

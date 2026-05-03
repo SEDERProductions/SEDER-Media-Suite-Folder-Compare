@@ -216,6 +216,109 @@ fn long_paths_remain_relative_and_exportable() {
 }
 
 #[test]
+fn timestamp_is_iso8601_shape() {
+    use crate::report::current_timestamp;
+    let ts = current_timestamp();
+    // Guard the shape: YYYY-MM-DDTHH:MM:SSZ
+    assert_eq!(ts.len(), 20, "expected 20 chars, got {ts:?}");
+    assert_eq!(&ts[4..5], "-");
+    assert_eq!(&ts[7..8], "-");
+    assert_eq!(&ts[10..11], "T");
+    assert_eq!(&ts[13..14], ":");
+    assert_eq!(&ts[16..17], ":");
+    assert_eq!(&ts[19..20], "Z");
+    assert!(ts.starts_with("20"));
+    assert!(!ts.contains("unix:"));
+}
+
+#[test]
+fn ignore_literal_no_substring_match() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("nodejs/script.js"), "x");
+    let scan = scan_folder(
+        dir.path(),
+        &ScanOptions {
+            ignore_hidden_system: false,
+            // Pattern "node" must NOT match file "script.js" inside the
+            // "nodejs" folder — only basename equality, never substring.
+            ignore_patterns: vec!["node".into()],
+            checksum: false,
+        },
+    )
+    .unwrap();
+    assert!(scan.files.contains_key("nodejs/script.js"));
+}
+
+#[test]
+fn ignore_glob_matches_pattern() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("nodejs/script.js"), "x");
+    let scan = scan_folder(
+        dir.path(),
+        &ScanOptions {
+            ignore_hidden_system: false,
+            ignore_patterns: vec!["*node*".into()],
+            checksum: false,
+        },
+    )
+    .unwrap();
+    assert!(!scan.files.contains_key("nodejs/script.js"));
+}
+
+#[test]
+fn progress_events_for_100_files_are_dense() {
+    let dir = tempdir().unwrap();
+    for i in 0..100 {
+        write(&dir.path().join(format!("clip-{i:03}.mov")), "x");
+    }
+    let mut events: u64 = 0;
+    let mut progress = |_event: ProgressEvent| {
+        events += 1;
+    };
+    let cancel = || false;
+    let mut callbacks = ProgressCallbacks {
+        progress: Some(&mut progress),
+        cancel: Some(&cancel),
+    };
+    scan_folder_with_progress(
+        dir.path(),
+        &ScanOptions {
+            ignore_hidden_system: true,
+            ignore_patterns: vec![],
+            checksum: false,
+        },
+        ProgressStage::ScanningA,
+        &mut callbacks,
+    )
+    .unwrap();
+    // Pre-fix: 10 events. Post-fix with multiple_of(50) fallback for total=0:
+    // ≥5 + every 50th = current<=5 emits 5; then 50, 100. Plus initial root
+    // emit. Should be at least 8 events.
+    assert!(
+        events >= 8,
+        "expected dense progress events for 100 files, got {events}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_appears_as_file_row() {
+    use std::os::unix::fs::symlink;
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    let target = a.path().join("real.mov");
+    write(&target, "abcd");
+    write(&b.path().join("real.mov"), "abcd");
+    symlink(&target, a.path().join("aliased.mov")).unwrap();
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    assert!(report
+        .rows
+        .iter()
+        .any(|row| row.relative_path == "aliased.mov"));
+}
+
+#[test]
 fn csv_export_escapes_quotes_and_includes_folder_rows() {
     let a = tempdir().unwrap();
     let b = tempdir().unwrap();

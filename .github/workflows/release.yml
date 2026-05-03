@@ -52,7 +52,13 @@ jobs:
       - name: Install Windows build dependencies
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install ninja cmake -y
+        run: choco install ninja -y
+
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Configure
         run: cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -67,6 +73,12 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           macdeployqt build/qt/seder-folder-compare-qt.app -qmldir=qt/qml
+          codesign --force --deep --options runtime \
+            --identifier com.sederproductions.media-suite.folder-compare \
+            --sign - \
+            --timestamp=none \
+            build/qt/seder-folder-compare-qt.app
+          codesign --verify --deep --strict --verbose=2 build/qt/seder-folder-compare-qt.app
           ditto -c -k --keepParent build/qt/seder-folder-compare-qt.app "${{ matrix.artifact }}"
 
       - name: Package Windows app
@@ -76,6 +88,19 @@ jobs:
           New-Item -ItemType Directory -Force dist/windows
           Copy-Item build/qt/seder-folder-compare-qt.exe dist/windows/
           windeployqt --qmldir qt/qml dist/windows/seder-folder-compare-qt.exe
+          $cert = New-SelfSignedCertificate `
+            -Subject "CN=SEDER Productions, O=SEDER Productions, C=GB" `
+            -Type CodeSigningCert -KeyUsage DigitalSignature `
+            -KeyAlgorithm RSA -KeyLength 2048 `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -NotAfter (Get-Date).AddYears(5)
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "x64\\signtool.exe$" } | Select-Object -First 1).FullName
+          if (-not $signtool) { $signtool = "signtool.exe" }
+          Get-ChildItem -Path dist/windows -Recurse -Filter *.exe | ForEach-Object {
+            & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint /tr http://timestamp.digicert.com /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed for $($_.FullName)" }
+          }
           Compress-Archive -Path dist/windows/* -DestinationPath "${{ matrix.artifact }}"
 
       - name: Package Linux AppImage

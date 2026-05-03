@@ -12,7 +12,7 @@ Download the latest macOS, Windows, and Linux builds from:
 
 [GitHub Releases](https://github.com/sederproductions/seder-folder-compare/releases/latest)
 
-The first public binaries are unsigned. On macOS, you may need to approve the app in **System Settings > Privacy & Security** after the first launch attempt.
+Builds are ad-hoc signed by SEDER Productions for tamper-detection. On macOS, you may still need to right-click the app → Open the first time, or approve it in **System Settings > Privacy & Security**. Windows SmartScreen will show a "More info → Run anyway" prompt — Apple notarization and a paid Windows Authenticode certificate are not configured.
 
 ## Features
 

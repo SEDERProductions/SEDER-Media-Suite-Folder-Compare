@@ -82,6 +82,7 @@ pub struct FileEntry {
 pub struct ScanResult {
     pub files: BTreeMap<String, FileEntry>,
     pub folders: BTreeSet<String>,
+    // u64: max ~18 EB, adequate for any real storage device
     pub total_size: u64,
 }
 
@@ -157,7 +158,7 @@ impl IgnoreMatcher {
             if pattern.is_glob {
                 wildcard_match(&pattern.raw, name) || wildcard_match(&pattern.raw, &normalized)
             } else {
-                name == pattern.raw || normalized.contains(&pattern.raw)
+                name == pattern.raw
             }
         })
     }
@@ -221,14 +222,20 @@ fn should_ignore(path: &Path, options: &ScanOptions, matcher: &IgnoreMatcher) ->
 }
 
 fn relative(root: &Path, path: &Path) -> Result<String> {
-    Ok(path
-        .strip_prefix(root)?
-        .to_string_lossy()
-        .replace('\\', "/"))
+    let stripped = path.strip_prefix(root)?;
+    Ok(stripped.to_string_lossy().replace('\\', "/"))
 }
 
-fn should_emit_progress(current: u64) -> bool {
-    current <= 10 || current.is_multiple_of(250)
+fn should_emit_progress(current: u64, total: u64) -> bool {
+    if current <= 5 {
+        return true;
+    }
+    if total > 0 {
+        let step = (total / 100).max(1);
+        current.is_multiple_of(step)
+    } else {
+        current.is_multiple_of(50)
+    }
 }
 
 fn emit_progress(
@@ -238,7 +245,7 @@ fn emit_progress(
     total: u64,
     path: Option<String>,
 ) {
-    if should_emit_progress(current)
+    if should_emit_progress(current, total)
         || matches!(
             stage,
             ProgressStage::Complete | ProgressStage::Canceled | ProgressStage::Failed
@@ -346,8 +353,32 @@ pub fn scan_folder_with_progress(
             continue;
         }
 
-        if entry.file_type().is_file() {
-            let metadata = entry.metadata()?;
+        // Treat regular files and symlinks (resolved via std::fs::metadata below)
+        // as files. WalkDir defaults to follow_links(false), so symlinks otherwise
+        // get silently dropped here, which masks real divergences when one side
+        // resolves a symlink into a real copy of the file.
+        if entry.file_type().is_file() || entry.file_type().is_symlink() {
+            let metadata = match std::fs::metadata(entry.path()) {
+                Ok(m) => m,
+                Err(_) if entry.file_type().is_symlink() => {
+                    // Broken symlink or symlink target is unreachable; skip it
+                    // rather than aborting the whole scan.
+                    continue;
+                }
+                Err(e) => {
+                    return Err(anyhow::Error::from(e)
+                        .context(format!("Unable to stat {}", entry.path().display())));
+                }
+            };
+            // A symlink-to-directory resolves to a directory here; record it as
+            // a folder rather than inserting a phantom file row.
+            if metadata.is_dir() {
+                result.folders.insert(rel);
+                continue;
+            }
+            if !metadata.is_file() {
+                continue;
+            }
             let modified = metadata
                 .modified()
                 .ok()

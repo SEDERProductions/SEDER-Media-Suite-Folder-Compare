@@ -12,7 +12,31 @@ pub fn current_timestamp() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
-    format!("unix:{secs}")
+    unix_to_utc_datetime(secs)
+}
+
+fn unix_to_utc_datetime(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let day_secs = secs % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    let hour = day_secs / 3_600;
+    let minute = (day_secs % 3_600) / 60;
+    let second = day_secs % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, u64, u64) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if m <= 2 { 1 } else { 0 };
+    (year, m as u64, d as u64)
 }
 
 pub fn pass_fail(report: &CompareReport) -> &'static str {

@@ -55,9 +55,24 @@ qt_add_resources(APP_RESOURCES app_resources
         "../assets/icon.svg"
 )
 
+set(SEDER_APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.icns")
+set(SEDER_APP_ICON_WINDOWS_RC "${CMAKE_CURRENT_SOURCE_DIR}/app.rc")
+
+set(SEDER_APP_PLATFORM_SOURCES "")
+if(APPLE)
+    set_source_files_properties("${SEDER_APP_ICON_MACOS}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    list(APPEND SEDER_APP_PLATFORM_SOURCES "${SEDER_APP_ICON_MACOS}")
+endif()
+if(WIN32)
+    list(APPEND SEDER_APP_PLATFORM_SOURCES "${SEDER_APP_ICON_WINDOWS_RC}")
+endif()
+
 qt_add_executable(seder-folder-compare-qt
+    WIN32
     ${APP_SOURCES}
     ${APP_RESOURCES}
+    ${SEDER_APP_PLATFORM_SOURCES}
 )
 
 target_include_directories(seder-folder-compare-qt PRIVATE
@@ -86,6 +101,7 @@ set_target_properties(seder-folder-compare-qt PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_GUI_IDENTIFIER com.sederproductions.media-suite.folder-compare
     MACOSX_BUNDLE_BUNDLE_NAME "SEDER Media Suite Folder Compare"
+    MACOSX_BUNDLE_ICON_FILE icon.icns
 )
 
 enable_testing()
