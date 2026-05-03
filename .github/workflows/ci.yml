@@ -58,7 +58,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build libfuse2 desktop-file-utils patchelf
+          sudo apt-get install -y build-essential cmake ninja-build libfuse2 desktop-file-utils patchelf libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
 
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
@@ -69,8 +69,13 @@ jobs:
         shell: pwsh
         run: choco install ninja cmake -y
 
+      - name: Verify Qt installation
+        run: |
+          echo "QT_ROOT_DIR=$QT_ROOT_DIR"
+          ls -la "$QT_ROOT_DIR/lib/cmake/Qt6" 2>/dev/null || true
+
       - name: Configure
-        run: cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
 
       - name: Build
         run: cmake --build build/qt --config Release
