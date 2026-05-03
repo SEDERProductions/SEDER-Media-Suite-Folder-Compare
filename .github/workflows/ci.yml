@@ -48,26 +48,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Qt (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.7.*"
-          target: desktop
-          install-deps: true
           cache: true
-          cache-key-prefix: install-qt-action-v2
-
-      - name: Install Qt (Windows MSVC 2022)
-        if: runner.os == 'Windows'
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.7.*"
-          target: desktop
-          arch: "win64_msvc2022_64"
-          install-deps: true
-          cache: true
-          cache-key-prefix: install-qt-action-v2
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -85,10 +70,10 @@ jobs:
         run: choco install ninja cmake -y
 
       - name: Configure
-        run: cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+        run: cmake -S qt -B build/qt -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build/qt
+        run: cmake --build build/qt --config Release
 
       - name: Test
-        run: ctest --test-dir build/qt --output-on-failure
+        run: ctest --test-dir build/qt --build-config Release --output-on-failure
