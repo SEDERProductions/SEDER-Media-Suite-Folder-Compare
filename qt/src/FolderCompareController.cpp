@@ -4,7 +4,7 @@
 
 #include <QDateTime>
 #include <QFileDialog>
-#include <QGuiApplication>
+#include <QApplication>
 #include <QLocale>
 #include <QSettings>
 #include <QStyleHints>
@@ -25,7 +25,7 @@ FolderCompareController::FolderCompareController(QObject *parent)
     m_ignorePatterns = settings.value(QStringLiteral("ignorePatterns"), QString::fromUtf8(defaultPatterns)).toString();
     m_ignoreHiddenSystem = settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool();
     m_filterModel.setSourceModel(&m_tableModel);
-    connect(qGuiApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
+    connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
         if (m_theme == QStringLiteral("system")) {
             emit effectiveDarkChanged();
         }
@@ -65,7 +65,7 @@ bool FolderCompareController::effectiveDark() const
     if (m_theme == QStringLiteral("light")) {
         return false;
     }
-    return qGuiApp->styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+    return qApp->styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
 QStringList FolderCompareController::logEntries() const { return m_logEntries; }
 QObject *FolderCompareController::tableModel() { return &m_tableModel; }
