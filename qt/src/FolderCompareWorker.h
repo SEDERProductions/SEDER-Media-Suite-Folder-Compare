@@ -8,7 +8,7 @@
 #include <QString>
 #include <atomic>
 
-Q_DECLARE_METATYPE(SfcReport *)
+Q_DECLARE_OPAQUE_POINTER(SfcReport *)
 
 class FolderCompareWorker final : public QObject {
     Q_OBJECT
