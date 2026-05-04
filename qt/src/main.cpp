@@ -7,6 +7,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QUrl>
 
 int main(int argc, char *argv[])
 {
