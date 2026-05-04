@@ -33,7 +33,7 @@ class CompareResultTableModel final : public QAbstractTableModel {
     Q_OBJECT
     Q_PROPERTY(int totalRows READ totalRows NOTIFY rowsChanged)
 
-public:
+  public:
     enum Roles {
         StatusCodeRole = Qt::UserRole + 1,
         StatusLabelRole,
@@ -47,11 +47,11 @@ public:
         IsFolderRole
     };
 
-    explicit CompareResultTableModel(QObject *parent = nullptr);
+    explicit CompareResultTableModel(QObject* parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex& parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
@@ -60,13 +60,13 @@ public:
     bool isFolderRow(int row) const;
 
     void clear();
-    void loadFromReport(const SfcReport *report);
+    void loadFromReport(const SfcReport* report);
     void setRows(QVector<CompareRow> rows);
 
-signals:
+  signals:
     void rowsChanged();
 
-private:
-    QVariant columnDisplay(const CompareRow &row, int column) const;
+  private:
+    QVariant columnDisplay(const CompareRow& row, int column) const;
     QVector<CompareRow> m_rows;
 };

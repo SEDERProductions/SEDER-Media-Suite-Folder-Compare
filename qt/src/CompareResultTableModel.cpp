@@ -5,21 +5,18 @@
 #include <QLocale>
 
 namespace {
-QString fromCString(const char *value)
-{
+QString fromCString(const char* value) {
     return value ? QString::fromUtf8(value) : QString();
 }
 
-QString formatBytes(bool present, quint64 bytes)
-{
+QString formatBytes(bool present, quint64 bytes) {
     if (!present) {
         return QString();
     }
     return QLocale().formattedDataSize(bytes, 1, QLocale::DataSizeTraditionalFormat);
 }
 
-CompareRow::Status fromStatus(SfcFileStatus status)
-{
+CompareRow::Status fromStatus(SfcFileStatus status) {
     switch (status) {
     case SFC_STATUS_MATCHING:
         return CompareRow::Matching;
@@ -33,8 +30,7 @@ CompareRow::Status fromStatus(SfcFileStatus status)
     return CompareRow::Changed;
 }
 
-QString statusLabel(int status)
-{
+QString statusLabel(int status) {
     switch (status) {
     case CompareRow::Matching:
         return QStringLiteral("Matching");
@@ -51,30 +47,24 @@ QString statusLabel(int status)
     }
     return QStringLiteral("Changed");
 }
-}
+} // namespace
 
-CompareResultTableModel::CompareResultTableModel(QObject *parent)
-    : QAbstractTableModel(parent)
-{
-}
+CompareResultTableModel::CompareResultTableModel(QObject* parent) : QAbstractTableModel(parent) {}
 
-int CompareResultTableModel::rowCount(const QModelIndex &parent) const
-{
+int CompareResultTableModel::rowCount(const QModelIndex& parent) const {
     return parent.isValid() ? 0 : m_rows.size();
 }
 
-int CompareResultTableModel::columnCount(const QModelIndex &parent) const
-{
+int CompareResultTableModel::columnCount(const QModelIndex& parent) const {
     return parent.isValid() ? 0 : 6;
 }
 
-QVariant CompareResultTableModel::data(const QModelIndex &index, int role) const
-{
+QVariant CompareResultTableModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_rows.size()) {
         return {};
     }
 
-    const CompareRow &row = m_rows.at(index.row());
+    const CompareRow& row = m_rows.at(index.row());
     switch (role) {
     case Qt::DisplayRole:
         return columnDisplay(row, index.column());
@@ -103,8 +93,8 @@ QVariant CompareResultTableModel::data(const QModelIndex &index, int role) const
     }
 }
 
-QVariant CompareResultTableModel::headerData(int section, Qt::Orientation orientation, int role) const
-{
+QVariant CompareResultTableModel::headerData(int section, Qt::Orientation orientation,
+                                             int role) const {
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole) {
         return {};
     }
@@ -127,8 +117,7 @@ QVariant CompareResultTableModel::headerData(int section, Qt::Orientation orient
     }
 }
 
-QHash<int, QByteArray> CompareResultTableModel::roleNames() const
-{
+QHash<int, QByteArray> CompareResultTableModel::roleNames() const {
     return {
         {StatusCodeRole, "statusCode"},
         {StatusLabelRole, "statusLabel"},
@@ -143,56 +132,54 @@ QHash<int, QByteArray> CompareResultTableModel::roleNames() const
     };
 }
 
-int CompareResultTableModel::totalRows() const
-{
+int CompareResultTableModel::totalRows() const {
     return m_rows.size();
 }
 
-int CompareResultTableModel::statusForSourceRow(int row) const
-{
+int CompareResultTableModel::statusForSourceRow(int row) const {
     if (row < 0 || row >= m_rows.size()) {
         return CompareRow::Changed;
     }
     return m_rows.at(row).status;
 }
 
-bool CompareResultTableModel::isFolderRow(int row) const
-{
+bool CompareResultTableModel::isFolderRow(int row) const {
     if (row < 0 || row >= m_rows.size()) {
         return false;
     }
     return m_rows.at(row).folder;
 }
 
-void CompareResultTableModel::clear()
-{
+void CompareResultTableModel::clear() {
     beginResetModel();
     m_rows.clear();
     endResetModel();
     emit rowsChanged();
 }
 
-void CompareResultTableModel::loadFromReport(const SfcReport *report)
-{
+void CompareResultTableModel::loadFromReport(const SfcReport* report) {
     QVector<CompareRow> rows;
     if (report) {
         const qsizetype fileRows = static_cast<qsizetype>(sfc_report_row_count(report));
         rows.reserve(fileRows + static_cast<qsizetype>(sfc_report_folder_diff_count(report)));
 
         for (qsizetype index = 0; index < fileRows; ++index) {
-            const auto status = fromStatus(sfc_report_row_status(report, static_cast<size_t>(index)));
+            const auto status =
+                fromStatus(sfc_report_row_status(report, static_cast<size_t>(index)));
             CompareRow row;
             row.relativePath = fromCString(sfc_report_row_path(report, static_cast<size_t>(index)));
             row.status = status;
             row.statusLabel = statusLabel(status);
-            row.sizeA = formatBytes(
-                sfc_report_row_size_a_present(report, static_cast<size_t>(index)),
-                sfc_report_row_size_a(report, static_cast<size_t>(index)));
-            row.sizeB = formatBytes(
-                sfc_report_row_size_b_present(report, static_cast<size_t>(index)),
-                sfc_report_row_size_b(report, static_cast<size_t>(index)));
-            row.checksumA = fromCString(sfc_report_row_checksum_a(report, static_cast<size_t>(index)));
-            row.checksumB = fromCString(sfc_report_row_checksum_b(report, static_cast<size_t>(index)));
+            row.sizeA =
+                formatBytes(sfc_report_row_size_a_present(report, static_cast<size_t>(index)),
+                            sfc_report_row_size_a(report, static_cast<size_t>(index)));
+            row.sizeB =
+                formatBytes(sfc_report_row_size_b_present(report, static_cast<size_t>(index)),
+                            sfc_report_row_size_b(report, static_cast<size_t>(index)));
+            row.checksumA =
+                fromCString(sfc_report_row_checksum_a(report, static_cast<size_t>(index)));
+            row.checksumB =
+                fromCString(sfc_report_row_checksum_b(report, static_cast<size_t>(index)));
             row.xxh64A = fromCString(sfc_report_row_xxh64_a(report, static_cast<size_t>(index)));
             row.xxh64B = fromCString(sfc_report_row_xxh64_b(report, static_cast<size_t>(index)));
             rows.push_back(row);
@@ -201,7 +188,8 @@ void CompareResultTableModel::loadFromReport(const SfcReport *report)
         const qsizetype foldersA = static_cast<qsizetype>(sfc_report_folder_count(report, 0));
         for (qsizetype index = 0; index < foldersA; ++index) {
             CompareRow row;
-            row.relativePath = fromCString(sfc_report_folder_path(report, 0, static_cast<size_t>(index)));
+            row.relativePath =
+                fromCString(sfc_report_folder_path(report, 0, static_cast<size_t>(index)));
             row.status = CompareRow::FolderOnlyInA;
             row.statusLabel = statusLabel(row.status);
             row.folder = true;
@@ -211,7 +199,8 @@ void CompareResultTableModel::loadFromReport(const SfcReport *report)
         const qsizetype foldersB = static_cast<qsizetype>(sfc_report_folder_count(report, 1));
         for (qsizetype index = 0; index < foldersB; ++index) {
             CompareRow row;
-            row.relativePath = fromCString(sfc_report_folder_path(report, 1, static_cast<size_t>(index)));
+            row.relativePath =
+                fromCString(sfc_report_folder_path(report, 1, static_cast<size_t>(index)));
             row.status = CompareRow::FolderOnlyInB;
             row.statusLabel = statusLabel(row.status);
             row.folder = true;
@@ -222,16 +211,14 @@ void CompareResultTableModel::loadFromReport(const SfcReport *report)
     setRows(std::move(rows));
 }
 
-void CompareResultTableModel::setRows(QVector<CompareRow> rows)
-{
+void CompareResultTableModel::setRows(QVector<CompareRow> rows) {
     beginResetModel();
     m_rows = std::move(rows);
     endResetModel();
     emit rowsChanged();
 }
 
-QVariant CompareResultTableModel::columnDisplay(const CompareRow &row, int column) const
-{
+QVariant CompareResultTableModel::columnDisplay(const CompareRow& row, int column) const {
     switch (column) {
     case 0:
         return row.statusLabel;

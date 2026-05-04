@@ -9,8 +9,7 @@
 #include <QQuickStyle>
 #include <QUrl>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("Seder Productions"));
     QApplication::setOrganizationDomain(QStringLiteral("sederproductions.com"));
@@ -18,7 +17,7 @@ int main(int argc, char *argv[])
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/assets/icon.svg")));
 
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
-    qRegisterMetaType<SfcReport *>("SfcReport*");
+    qRegisterMetaType<SfcReport*>("SfcReport*");
 
     FolderCompareController controller;
 

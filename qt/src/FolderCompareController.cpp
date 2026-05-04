@@ -3,9 +3,9 @@
 #include "FolderCompareController.h"
 #include "FolderCompareUtils.h"
 
+#include <QApplication>
 #include <QDateTime>
 #include <QFileDialog>
-#include <QApplication>
 #include <QLocale>
 #include <QSettings>
 #include <QStyleHints>
@@ -14,16 +14,16 @@
 namespace {
 constexpr auto defaultPatterns = ".DS_Store, Thumbs.db, desktop.ini, .Spotlight-V100, .Trashes";
 constexpr auto reportTitle = "SEDER Media Suite Folder Compare Report";
-}
+} // namespace
 
-FolderCompareController::FolderCompareController(QObject *parent)
-    : QObject(parent)
-    , m_statusText(QStringLiteral("Ready to compare two folders."))
-    , m_progressText(QStringLiteral("Idle"))
-{
+FolderCompareController::FolderCompareController(QObject* parent)
+    : QObject(parent), m_statusText(QStringLiteral("Ready to compare two folders.")),
+      m_progressText(QStringLiteral("Idle")) {
     QSettings settings;
     m_theme = settings.value(QStringLiteral("theme"), QStringLiteral("system")).toString();
-    m_ignorePatterns = settings.value(QStringLiteral("ignorePatterns"), QString::fromUtf8(defaultPatterns)).toString();
+    m_ignorePatterns =
+        settings.value(QStringLiteral("ignorePatterns"), QString::fromUtf8(defaultPatterns))
+            .toString();
     m_ignoreHiddenSystem = settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool();
     m_filterModel.setSourceModel(&m_tableModel);
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
@@ -35,8 +35,7 @@ FolderCompareController::FolderCompareController(QObject *parent)
     addLog(QStringLiteral("Folder Compare ready."));
 }
 
-FolderCompareController::~FolderCompareController()
-{
+FolderCompareController::~FolderCompareController() {
     if (m_worker) {
         m_worker->cancel();
     }
@@ -52,17 +51,34 @@ FolderCompareController::~FolderCompareController()
     }
 }
 
-QString FolderCompareController::folderA() const { return m_folderA; }
-QString FolderCompareController::folderB() const { return m_folderB; }
-int FolderCompareController::mode() const { return m_mode; }
-bool FolderCompareController::ignoreHiddenSystem() const { return m_ignoreHiddenSystem; }
-QString FolderCompareController::ignorePatterns() const { return m_ignorePatterns; }
-bool FolderCompareController::busy() const { return m_busy; }
-QString FolderCompareController::statusText() const { return m_statusText; }
-QString FolderCompareController::progressText() const { return m_progressText; }
-QString FolderCompareController::theme() const { return m_theme; }
-bool FolderCompareController::effectiveDark() const
-{
+QString FolderCompareController::folderA() const {
+    return m_folderA;
+}
+QString FolderCompareController::folderB() const {
+    return m_folderB;
+}
+int FolderCompareController::mode() const {
+    return m_mode;
+}
+bool FolderCompareController::ignoreHiddenSystem() const {
+    return m_ignoreHiddenSystem;
+}
+QString FolderCompareController::ignorePatterns() const {
+    return m_ignorePatterns;
+}
+bool FolderCompareController::busy() const {
+    return m_busy;
+}
+QString FolderCompareController::statusText() const {
+    return m_statusText;
+}
+QString FolderCompareController::progressText() const {
+    return m_progressText;
+}
+QString FolderCompareController::theme() const {
+    return m_theme;
+}
+bool FolderCompareController::effectiveDark() const {
     if (m_theme == QStringLiteral("dark")) {
         return true;
     }
@@ -71,18 +87,35 @@ bool FolderCompareController::effectiveDark() const
     }
     return qApp->styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
-QStringList FolderCompareController::logEntries() const { return m_logEntries; }
-QObject *FolderCompareController::tableModel() { return &m_tableModel; }
-QObject *FolderCompareController::filterModel() { return &m_filterModel; }
-int FolderCompareController::matchingCount() const { return m_matchingCount; }
-int FolderCompareController::changedCount() const { return m_changedCount; }
-int FolderCompareController::onlyACount() const { return m_onlyACount; }
-int FolderCompareController::onlyBCount() const { return m_onlyBCount; }
-int FolderCompareController::folderDiffCount() const { return m_folderDiffCount; }
-QString FolderCompareController::totalSizeText() const { return m_totalSizeText; }
+QStringList FolderCompareController::logEntries() const {
+    return m_logEntries;
+}
+QObject* FolderCompareController::tableModel() {
+    return &m_tableModel;
+}
+QObject* FolderCompareController::filterModel() {
+    return &m_filterModel;
+}
+int FolderCompareController::matchingCount() const {
+    return m_matchingCount;
+}
+int FolderCompareController::changedCount() const {
+    return m_changedCount;
+}
+int FolderCompareController::onlyACount() const {
+    return m_onlyACount;
+}
+int FolderCompareController::onlyBCount() const {
+    return m_onlyBCount;
+}
+int FolderCompareController::folderDiffCount() const {
+    return m_folderDiffCount;
+}
+QString FolderCompareController::totalSizeText() const {
+    return m_totalSizeText;
+}
 
-void FolderCompareController::setFolderA(const QString &folder)
-{
+void FolderCompareController::setFolderA(const QString& folder) {
     if (m_folderA == folder) {
         return;
     }
@@ -90,8 +123,7 @@ void FolderCompareController::setFolderA(const QString &folder)
     emit folderAChanged();
 }
 
-void FolderCompareController::setFolderB(const QString &folder)
-{
+void FolderCompareController::setFolderB(const QString& folder) {
     if (m_folderB == folder) {
         return;
     }
@@ -99,8 +131,7 @@ void FolderCompareController::setFolderB(const QString &folder)
     emit folderBChanged();
 }
 
-void FolderCompareController::setMode(int mode)
-{
+void FolderCompareController::setMode(int mode) {
     if (m_mode == mode) {
         return;
     }
@@ -108,8 +139,7 @@ void FolderCompareController::setMode(int mode)
     emit modeChanged();
 }
 
-void FolderCompareController::setIgnoreHiddenSystem(bool ignore)
-{
+void FolderCompareController::setIgnoreHiddenSystem(bool ignore) {
     if (m_ignoreHiddenSystem == ignore) {
         return;
     }
@@ -118,8 +148,7 @@ void FolderCompareController::setIgnoreHiddenSystem(bool ignore)
     emit ignoreHiddenSystemChanged();
 }
 
-void FolderCompareController::setIgnorePatterns(const QString &patterns)
-{
+void FolderCompareController::setIgnorePatterns(const QString& patterns) {
     if (m_ignorePatterns == patterns) {
         return;
     }
@@ -128,11 +157,10 @@ void FolderCompareController::setIgnorePatterns(const QString &patterns)
     emit ignorePatternsChanged();
 }
 
-void FolderCompareController::setTheme(const QString &theme)
-{
+void FolderCompareController::setTheme(const QString& theme) {
     const QString safeTheme = (theme == QStringLiteral("light") || theme == QStringLiteral("dark"))
-        ? theme
-        : QStringLiteral("system");
+                                  ? theme
+                                  : QStringLiteral("system");
     if (m_theme == safeTheme) {
         return;
     }
@@ -142,24 +170,21 @@ void FolderCompareController::setTheme(const QString &theme)
     emit effectiveDarkChanged();
 }
 
-void FolderCompareController::chooseFolderA()
-{
+void FolderCompareController::chooseFolderA() {
     const QString selected = pickFolder(QStringLiteral("Choose Folder A"), m_folderA);
     if (!selected.isEmpty()) {
         setFolderA(selected);
     }
 }
 
-void FolderCompareController::chooseFolderB()
-{
+void FolderCompareController::chooseFolderB() {
     const QString selected = pickFolder(QStringLiteral("Choose Folder B"), m_folderB);
     if (!selected.isEmpty()) {
         setFolderB(selected);
     }
 }
 
-void FolderCompareController::startComparison()
-{
+void FolderCompareController::startComparison() {
     if (m_busy) {
         return;
     }
@@ -184,8 +209,9 @@ void FolderCompareController::startComparison()
     emit progressChanged();
     resetSummary();
 
-    auto *thread = new QThread(this);
-    auto *worker = new FolderCompareWorker(m_folderA, m_folderB, m_mode, m_ignoreHiddenSystem, m_ignorePatterns);
+    auto* thread = new QThread(this);
+    auto* worker = new FolderCompareWorker(m_folderA, m_folderB, m_mode, m_ignoreHiddenSystem,
+                                           m_ignorePatterns);
     worker->moveToThread(thread);
     m_thread = thread;
     m_worker = worker;
@@ -204,8 +230,7 @@ void FolderCompareController::startComparison()
     thread->start();
 }
 
-void FolderCompareController::cancelComparison()
-{
+void FolderCompareController::cancelComparison() {
     if (!m_busy || !m_worker) {
         return;
     }
@@ -214,16 +239,14 @@ void FolderCompareController::cancelComparison()
     addLog(QStringLiteral("Cancellation requested."));
 }
 
-void FolderCompareController::exportTxt()
-{
+void FolderCompareController::exportTxt() {
     if (!hasReport()) {
         setStatusText(QStringLiteral("No comparison report to export."));
         return;
     }
-    const QString path = savePath(
-        QStringLiteral("Export TXT Report"),
-        QStringLiteral("seder-folder-compare-report.txt"),
-        QStringLiteral("Text report (*.txt)"));
+    const QString path = savePath(QStringLiteral("Export TXT Report"),
+                                  QStringLiteral("seder-folder-compare-report.txt"),
+                                  QStringLiteral("Text report (*.txt)"));
     if (path.isEmpty()) {
         addLog(QStringLiteral("TXT export canceled."));
         setStatusText(QStringLiteral("Export canceled."));
@@ -232,7 +255,7 @@ void FolderCompareController::exportTxt()
 
     const QByteArray outputPath = path.toUtf8();
     const QByteArray title = QByteArray(reportTitle);
-    char *error = nullptr;
+    char* error = nullptr;
     if (sfc_report_write_txt(m_report, outputPath.constData(), title.constData(), &error)) {
         addLog(QStringLiteral("TXT exported: %1").arg(path));
         setStatusText(QStringLiteral("TXT export complete."));
@@ -243,16 +266,14 @@ void FolderCompareController::exportTxt()
     }
 }
 
-void FolderCompareController::exportCsv()
-{
+void FolderCompareController::exportCsv() {
     if (!hasReport()) {
         setStatusText(QStringLiteral("No comparison report to export."));
         return;
     }
-    const QString path = savePath(
-        QStringLiteral("Export CSV Report"),
-        QStringLiteral("seder-folder-compare-report.csv"),
-        QStringLiteral("CSV report (*.csv)"));
+    const QString path = savePath(QStringLiteral("Export CSV Report"),
+                                  QStringLiteral("seder-folder-compare-report.csv"),
+                                  QStringLiteral("CSV report (*.csv)"));
     if (path.isEmpty()) {
         addLog(QStringLiteral("CSV export canceled."));
         setStatusText(QStringLiteral("Export canceled."));
@@ -260,7 +281,7 @@ void FolderCompareController::exportCsv()
     }
 
     const QByteArray outputPath = path.toUtf8();
-    char *error = nullptr;
+    char* error = nullptr;
     if (sfc_report_write_csv(m_report, outputPath.constData(), &error)) {
         addLog(QStringLiteral("CSV exported: %1").arg(path));
         setStatusText(QStringLiteral("CSV export complete."));
@@ -271,47 +292,43 @@ void FolderCompareController::exportCsv()
     }
 }
 
-void FolderCompareController::setFilterMode(int mode)
-{
+void FolderCompareController::setFilterMode(int mode) {
     m_filterModel.setFilterMode(mode);
 }
 
-void FolderCompareController::clearLog()
-{
+void FolderCompareController::clearLog() {
     m_logEntries.clear();
     emit logEntriesChanged();
 }
 
-int FolderCompareController::totalRows() const
-{
+int FolderCompareController::totalRows() const {
     return m_tableModel.totalRows();
 }
 
-qulonglong FolderCompareController::progressCurrent() const
-{
+qulonglong FolderCompareController::progressCurrent() const {
     return m_progressCurrent;
 }
 
-qulonglong FolderCompareController::progressTotal() const
-{
+qulonglong FolderCompareController::progressTotal() const {
     return m_progressTotal;
 }
 
-void FolderCompareController::handleProgress(int stage, qulonglong current, qulonglong total, const QString &path)
-{
+void FolderCompareController::handleProgress(int stage, qulonglong current, qulonglong total,
+                                             const QString& path) {
     m_progressCurrent = current;
     m_progressTotal = total;
     emit progressChanged();
 
     const QString label = progressLabel(stage, current, total, path);
     setProgressText(label);
-    if (stage == SFC_PROGRESS_FAILED || stage == SFC_PROGRESS_CANCELED || stage == SFC_PROGRESS_COMPLETE) {
+    if (stage == SFC_PROGRESS_FAILED || stage == SFC_PROGRESS_CANCELED ||
+        stage == SFC_PROGRESS_COMPLETE) {
         addLog(label);
     }
 }
 
-void FolderCompareController::handleFinished(SfcReport *report, const QString &errorMessage, bool canceled)
-{
+void FolderCompareController::handleFinished(SfcReport* report, const QString& errorMessage,
+                                             bool canceled) {
     setBusy(false);
     m_progressCurrent = 0;
     m_progressTotal = 0;
@@ -333,7 +350,8 @@ void FolderCompareController::handleFinished(SfcReport *report, const QString &e
         if (report) {
             sfc_report_free(report);
         }
-        const QString message = errorMessage.isEmpty() ? QStringLiteral("Comparison failed.") : errorMessage;
+        const QString message =
+            errorMessage.isEmpty() ? QStringLiteral("Comparison failed.") : errorMessage;
         setStatusText(message);
         setProgressText(QStringLiteral("Failed"));
         addLog(QStringLiteral("Comparison failed: %1").arg(message));
@@ -353,8 +371,7 @@ void FolderCompareController::handleFinished(SfcReport *report, const QString &e
     addLog(QStringLiteral("Comparison complete: %1 rows.").arg(m_tableModel.totalRows()));
 }
 
-void FolderCompareController::setBusy(bool busy)
-{
+void FolderCompareController::setBusy(bool busy) {
     if (m_busy == busy) {
         return;
     }
@@ -362,8 +379,7 @@ void FolderCompareController::setBusy(bool busy)
     emit busyChanged();
 }
 
-void FolderCompareController::setStatusText(const QString &status)
-{
+void FolderCompareController::setStatusText(const QString& status) {
     if (m_statusText == status) {
         return;
     }
@@ -371,8 +387,7 @@ void FolderCompareController::setStatusText(const QString &status)
     emit statusTextChanged();
 }
 
-void FolderCompareController::setProgressText(const QString &progress)
-{
+void FolderCompareController::setProgressText(const QString& progress) {
     if (m_progressText == progress) {
         return;
     }
@@ -380,8 +395,7 @@ void FolderCompareController::setProgressText(const QString &progress)
     emit progressTextChanged();
 }
 
-void FolderCompareController::addLog(const QString &message)
-{
+void FolderCompareController::addLog(const QString& message) {
     const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
     m_logEntries.prepend(QStringLiteral("%1  %2").arg(timestamp, message));
     while (m_logEntries.size() > 200) {
@@ -390,8 +404,7 @@ void FolderCompareController::addLog(const QString &message)
     emit logEntriesChanged();
 }
 
-void FolderCompareController::resetSummary()
-{
+void FolderCompareController::resetSummary() {
     m_matchingCount = 0;
     m_changedCount = 0;
     m_onlyACount = 0;
@@ -401,8 +414,7 @@ void FolderCompareController::resetSummary()
     emit summaryChanged();
 }
 
-void FolderCompareController::loadSummary(const SfcReport *report)
-{
+void FolderCompareController::loadSummary(const SfcReport* report) {
     m_matchingCount = static_cast<int>(sfc_report_matching_count(report));
     m_changedCount = static_cast<int>(sfc_report_changed_count(report));
     m_onlyACount = static_cast<int>(sfc_report_only_a_count(report));
@@ -412,31 +424,27 @@ void FolderCompareController::loadSummary(const SfcReport *report)
     emit summaryChanged();
 }
 
-bool FolderCompareController::hasReport() const
-{
+bool FolderCompareController::hasReport() const {
     return m_report != nullptr;
 }
 
-QString FolderCompareController::pickFolder(const QString &title, const QString &current)
-{
+QString FolderCompareController::pickFolder(const QString& title, const QString& current) {
     return QFileDialog::getExistingDirectory(qApp->activeWindow(), title, current);
 }
 
-QString FolderCompareController::savePath(const QString &title, const QString &defaultName, const QString &filter)
-{
+QString FolderCompareController::savePath(const QString& title, const QString& defaultName,
+                                          const QString& filter) {
     return QFileDialog::getSaveFileName(qApp->activeWindow(), title, defaultName, filter);
 }
 
-QString FolderCompareController::formatBytes(qulonglong bytes)
-{
+QString FolderCompareController::formatBytes(qulonglong bytes) {
     return QLocale().formattedDataSize(bytes, 1, QLocale::DataSizeTraditionalFormat);
 }
 
-QString FolderCompareController::progressLabel(int stage, qulonglong current, qulonglong total, const QString &path)
-{
-    const QString count = total > 0
-        ? QStringLiteral("%1 / %2").arg(current).arg(total)
-        : QString::number(current);
+QString FolderCompareController::progressLabel(int stage, qulonglong current, qulonglong total,
+                                               const QString& path) {
+    const QString count =
+        total > 0 ? QStringLiteral("%1 / %2").arg(current).arg(total) : QString::number(current);
     const QString suffix = path.isEmpty() ? QString() : QStringLiteral(" - %1").arg(path);
     switch (stage) {
     case SFC_PROGRESS_SCANNING_A:

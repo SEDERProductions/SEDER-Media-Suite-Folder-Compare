@@ -9,9 +9,8 @@
 class CompareModelTests final : public QObject {
     Q_OBJECT
 
-private slots:
-    void exposesRowsAndRoles()
-    {
+  private slots:
+    void exposesRowsAndRoles() {
         CompareResultTableModel model;
         QVector<CompareRow> rows;
         rows.push_back(CompareRow{QStringLiteral("A001/clip.mov"),
@@ -40,13 +39,11 @@ private slots:
         QCOMPARE(model.columnCount(), 6);
         QCOMPARE(model.data(model.index(0, 1), Qt::DisplayRole).toString(),
                  QStringLiteral("A001/clip.mov"));
-        QCOMPARE(
-            model.data(model.index(1, 0), CompareResultTableModel::StatusCodeRole).toInt(),
-            CompareRow::Changed);
+        QCOMPARE(model.data(model.index(1, 0), CompareResultTableModel::StatusCodeRole).toInt(),
+                 CompareRow::Changed);
     }
 
-    void filtersByOperationalState()
-    {
+    void filtersByOperationalState() {
         CompareResultTableModel model;
         QVector<CompareRow> rows;
         rows.push_back(CompareRow{QStringLiteral("match.mov"),
@@ -133,8 +130,7 @@ private slots:
                  QStringLiteral("folder"));
     }
 
-    void emitsRowsChangedOnReset()
-    {
+    void emitsRowsChangedOnReset() {
         CompareResultTableModel model;
         QSignalSpy spy(&model, &CompareResultTableModel::rowsChanged);
         model.setRows({CompareRow{QStringLiteral("clip.mov"),

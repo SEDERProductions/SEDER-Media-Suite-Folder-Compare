@@ -4,19 +4,15 @@
 
 #include "CompareResultTableModel.h"
 
-CompareFilterProxyModel::CompareFilterProxyModel(QObject *parent)
-    : QSortFilterProxyModel(parent)
-{
+CompareFilterProxyModel::CompareFilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {
     setDynamicSortFilter(false);
 }
 
-int CompareFilterProxyModel::filterMode() const
-{
+int CompareFilterProxyModel::filterMode() const {
     return m_filterMode;
 }
 
-void CompareFilterProxyModel::setFilterMode(int mode)
-{
+void CompareFilterProxyModel::setFilterMode(int mode) {
     if (m_filterMode == mode) {
         return;
     }
@@ -25,11 +21,11 @@ void CompareFilterProxyModel::setFilterMode(int mode)
     emit filterModeChanged();
 }
 
-bool CompareFilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
-{
+bool CompareFilterProxyModel::filterAcceptsRow(int sourceRow,
+                                               const QModelIndex& sourceParent) const {
     Q_UNUSED(sourceParent)
 
-    const auto *model = qobject_cast<const CompareResultTableModel *>(sourceModel());
+    const auto* model = qobject_cast<const CompareResultTableModel*>(sourceModel());
     if (!model) {
         return true;
     }

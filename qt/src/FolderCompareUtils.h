@@ -6,8 +6,7 @@
 
 #include <QString>
 
-inline QString takeError(char *error)
-{
+inline QString takeError(char* error) {
     if (!error) {
         return {};
     }
