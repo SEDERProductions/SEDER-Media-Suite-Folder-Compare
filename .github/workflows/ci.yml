@@ -81,6 +81,7 @@ jobs:
         run: cmake --build build/qt --config Release
 
       - name: Check clang-format
+        if: runner.os == 'Linux'
         run: |
           find qt/src qt/tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
 
