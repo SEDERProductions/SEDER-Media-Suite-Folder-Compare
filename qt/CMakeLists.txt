@@ -94,6 +94,12 @@ target_link_libraries(seder-folder-compare-qt PRIVATE
     seder_folder_compare_core
 )
 
+if(WIN32)
+    target_link_libraries(seder-folder-compare-qt PRIVATE
+        ntdll ws2_32 userenv shell32 advapi32 bcrypt
+    )
+endif()
+
 set_target_properties(seder-folder-compare-qt PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_GUI_IDENTIFIER com.sederproductions.media-suite.folder-compare
@@ -121,5 +127,11 @@ target_link_libraries(compare-model-tests PRIVATE
     Qt6::Test
     seder_folder_compare_core
 )
+
+if(WIN32)
+    target_link_libraries(compare-model-tests PRIVATE
+        ntdll ws2_32 userenv shell32 advapi32 bcrypt
+    )
+endif()
 
 add_test(NAME compare-model-tests COMMAND compare-model-tests)
