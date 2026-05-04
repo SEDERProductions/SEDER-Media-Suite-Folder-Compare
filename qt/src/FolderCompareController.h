@@ -105,7 +105,6 @@ private:
     void addLog(const QString &message);
     void resetSummary();
     void loadSummary(const SfcReport *report);
-    bool hasReport() const;
     QString pickFolder(const QString &title, const QString &current);
     QString savePath(const QString &title, const QString &defaultName, const QString &filter);
     static QString formatBytes(qulonglong bytes);

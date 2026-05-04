@@ -395,12 +395,12 @@ bool FolderCompareController::hasReport() const
 
 QString FolderCompareController::pickFolder(const QString &title, const QString &current)
 {
-    return QFileDialog::getExistingDirectory(QGuiApplication::focusWindow(), title, current);
+    return QFileDialog::getExistingDirectory(qApp->activeWindow(), title, current);
 }
 
 QString FolderCompareController::savePath(const QString &title, const QString &defaultName, const QString &filter)
 {
-    return QFileDialog::getSaveFileName(QGuiApplication::focusWindow(), title, defaultName, filter);
+    return QFileDialog::getSaveFileName(qApp->activeWindow(), title, defaultName, filter);
 }
 
 QString FolderCompareController::formatBytes(qulonglong bytes)
