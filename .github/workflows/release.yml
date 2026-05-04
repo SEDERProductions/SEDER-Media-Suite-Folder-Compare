@@ -27,6 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -55,11 +56,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add Cargo.toml
-          git commit -m "chore: bump version to ${new_tag}"
-          git tag "$new_tag"
-          git push origin main
-          git push origin "$new_tag"
+          if git diff --quiet; then
+            echo "No version changes, skipping commit"
+          else
+            git add Cargo.toml
+            git commit -m "chore: bump version to ${new_tag}"
+            git tag "$new_tag"
+            git push origin HEAD:main
+            git push origin "$new_tag"
+          fi
 
   build:
     name: Build ${{ matrix.name }}
