@@ -8,14 +8,17 @@ ApplicationWindow {
     id: window
     width: 1320
     height: 860
-    minimumWidth: 1040
+    minimumWidth: 1200
     minimumHeight: 720
     visible: true
-    title: "SEDER Media Suite Folder Compare"
+    title: "SEDER Folder Compare"
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
+    property bool sidebarCollapsed: false
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
+    readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
+    readonly property bool showChecksums: folderController.mode === 2
 
     QtObject {
         id: colors
@@ -41,11 +44,40 @@ ApplicationWindow {
         return colors.faint
     }
 
+    function statusText(statusCode) {
+        if (statusCode === 0) return "\u2713 Matching"
+        if (statusCode === 1) return "\u2717 Changed"
+        if (statusCode === 2) return "\u25b8 Only A"
+        if (statusCode === 3) return "\u25b8 Only B"
+        if (statusCode === 4) return "Folder"
+        return "Unknown"
+    }
+
     function filterLabel(index) {
         return ["All", "Matching", "Changed", "Only A", "Only B", "Folders"][index]
     }
 
+    function filterCount(index) {
+        switch (index) {
+            case 0: return folderController.totalRows
+            case 1: return folderController.matchingCount
+            case 2: return folderController.changedCount
+            case 3: return folderController.onlyACount
+            case 4: return folderController.onlyBCount
+            case 5: return folderController.folderDiffCount
+        }
+        return 0
+    }
+
     color: colors.bg
+
+    // Keyboard shortcuts
+    Shortcut { sequence: "Ctrl+O"; onActivated: folderController.chooseFolderA() }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: folderController.chooseFolderB() }
+    Shortcut { sequence: "Ctrl+R"; onActivated: folderController.startComparison() }
+    Shortcut { sequence: "Escape"; onActivated: folderController.cancelComparison() }
+    Shortcut { sequence: "Ctrl+Shift+T"; onActivated: folderController.exportTxt() }
+    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: folderController.exportCsv() }
 
     RowLayout {
         anchors.fill: parent
@@ -99,6 +131,27 @@ ApplicationWindow {
 
                 Item { Layout.fillHeight: true }
 
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: sidebarCollapsed ? "\u25b6" : "\u25c0"
+                    font.pixelSize: 14
+                    onClicked: sidebarCollapsed = !sidebarCollapsed
+                    background: Rectangle {
+                        radius: 4
+                        color: parent.down ? colors.accentDark : "transparent"
+                        border.color: colors.faint
+                        border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        color: "#b8ae9b"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    ToolTip.visible: hovered
+                    ToolTip.text: sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                }
+
                 Label {
                     text: "LOCAL"
                     color: "#b8ae9b"
@@ -111,10 +164,12 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 368
+            Layout.preferredWidth: sidebarCollapsed ? 0 : 368
+            visible: !sidebarCollapsed
             color: colors.panel
             border.color: colors.line
             border.width: 1
+            clip: true
 
             ScrollView {
                 anchors.fill: parent
@@ -129,7 +184,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: 3
                         Label {
-                            text: "SEDER Media Suite Folder Compare"
+                            text: "SEDER Folder Compare"
                             color: colors.text
                             font.pixelSize: 22
                             font.bold: true
@@ -137,7 +192,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: "VOL. 04 / FOLDER AUDIT"
+                            text: "v0.1.2"
                             color: colors.muted
                             font.pixelSize: 10
                             font.family: window.monoFont
@@ -155,11 +210,13 @@ ApplicationWindow {
                         label: "Folder A"
                         path: folderController.folderA
                         action: function() { folderController.chooseFolderA() }
+                        onDroppedFolder: function(folder) { folderController.folderA = folder }
                     }
                     FolderPicker {
                         label: "Folder B"
                         path: folderController.folderB
                         action: function() { folderController.chooseFolderB() }
+                        onDroppedFolder: function(folder) { folderController.folderB = folder }
                     }
 
                     Label {
@@ -170,11 +227,63 @@ ApplicationWindow {
                     }
 
                     ComboBox {
+                        id: modeCombo
                         Layout.fillWidth: true
                         model: ["Path + size", "Path + size + modified time", "Path + size + checksum"]
                         currentIndex: folderController.mode
                         enabled: !folderController.busy
                         onActivated: folderController.mode = currentIndex
+
+                        contentItem: Text {
+                            text: modeCombo.displayText
+                            color: colors.text
+                            font.pixelSize: 13
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 8
+                        }
+
+                        background: Rectangle {
+                            radius: 5
+                            color: colors.panelAlt
+                            border.color: colors.line
+                            border.width: 1
+                        }
+
+                        popup: Popup {
+                            y: modeCombo.height
+                            width: modeCombo.width
+                            implicitHeight: contentItem.implicitHeight + 10
+                            padding: 4
+
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: modeCombo.delegateModel
+                                currentIndex: modeCombo.highlightedIndex
+                                ScrollBar.vertical: ScrollBar {}
+                            }
+
+                            background: Rectangle {
+                                radius: 5
+                                color: colors.panel
+                                border.color: colors.line
+                                border.width: 1
+                            }
+                        }
+
+                        delegate: ItemDelegate {
+                            width: modeCombo.width - 8
+                            contentItem: Text {
+                                text: modelData
+                                color: colors.text
+                                font.pixelSize: 13
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                color: modeCombo.highlightedIndex === index ? colors.accent : "transparent"
+                                radius: 3
+                            }
+                        }
                     }
 
                     Label {
@@ -185,13 +294,42 @@ ApplicationWindow {
                     }
 
                     CheckBox {
+                        id: hiddenCheck
                         text: "Ignore hidden/system files"
                         checked: folderController.ignoreHiddenSystem
                         enabled: !folderController.busy
                         onToggled: folderController.ignoreHiddenSystem = checked
+
+                        contentItem: Text {
+                            text: hiddenCheck.text
+                            color: colors.text
+                            font.pixelSize: 13
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: hiddenCheck.indicator.width + hiddenCheck.spacing
+                        }
+
+                        indicator: Rectangle {
+                            implicitWidth: 18
+                            implicitHeight: 18
+                            x: hiddenCheck.leftPadding
+                            y: parent.height / 2 - height / 2
+                            radius: 3
+                            color: hiddenCheck.checked ? colors.accent : colors.panelAlt
+                            border.color: colors.line
+                            border.width: 1
+
+                            Text {
+                                visible: hiddenCheck.checked
+                                anchors.centerIn: parent
+                                text: "\u2713"
+                                color: "#fff"
+                                font.pixelSize: 12
+                            }
+                        }
                     }
 
                     TextField {
+                        id: ignoreField
                         Layout.fillWidth: true
                         text: folderController.ignorePatterns
                         enabled: !folderController.busy
@@ -199,7 +337,15 @@ ApplicationWindow {
                         placeholderText: ".DS_Store, *.tmp"
                         font.family: window.monoFont
                         font.pixelSize: 12
+                        color: colors.text
                         onTextEdited: folderController.ignorePatterns = text
+
+                        background: Rectangle {
+                            radius: 5
+                            color: colors.panelAlt
+                            border.color: ignoreField.focus ? colors.accent : colors.line
+                            border.width: 1
+                        }
                     }
 
                     Label {
@@ -221,6 +367,20 @@ ApplicationWindow {
                                 checkable: true
                                 checked: folderController.theme === modelData
                                 onClicked: folderController.theme = modelData
+
+                                background: Rectangle {
+                                    radius: 5
+                                    color: parent.checked ? colors.accent : colors.panelAlt
+                                    border.color: parent.checked ? colors.accentDark : colors.line
+                                    border.width: 1
+                                }
+                                contentItem: Text {
+                                    text: parent.text
+                                    color: parent.checked ? "#fff7ee" : colors.text
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12
+                                }
                             }
                         }
                     }
@@ -230,26 +390,21 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
-                            text: folderController.busy ? "Comparing..." : "Start Comparison"
-                            enabled: !folderController.busy
-                            onClicked: folderController.startComparison()
+                            text: folderController.busy ? "Cancel Comparison" : "Start Comparison"
+                            onClicked: folderController.busy ? folderController.cancelComparison() : folderController.startComparison()
                             background: Rectangle {
                                 radius: 5
-                                color: parent.enabled ? colors.accent : colors.panelAlt
-                                border.color: colors.accentDark
+                                color: folderController.busy ? colors.panelAlt : colors.accent
+                                border.color: folderController.busy ? colors.line : colors.accentDark
+                                border.width: 1
                             }
                             contentItem: Text {
                                 text: parent.text
-                                color: parent.enabled ? "#fff7ee" : colors.faint
+                                color: folderController.busy ? colors.faint : "#fff7ee"
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                                 font.bold: true
                             }
-                        }
-                        Button {
-                            text: "Cancel"
-                            enabled: folderController.busy
-                            onClicked: folderController.cancelComparison()
                         }
                     }
 
@@ -259,14 +414,42 @@ ApplicationWindow {
                         Button {
                             Layout.fillWidth: true
                             text: "Export TXT"
-                            enabled: !folderController.busy
+                            enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            ToolTip.visible: hovered && !enabled
+                            ToolTip.text: "Run a comparison first"
                         }
                         Button {
                             Layout.fillWidth: true
                             text: "Export CSV"
-                            enabled: !folderController.busy
+                            enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            ToolTip.visible: hovered && !enabled
+                            ToolTip.text: "Run a comparison first"
                         }
                     }
 
@@ -282,7 +465,7 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 118
+                Layout.preferredHeight: 148
                 color: colors.bg
                 border.color: colors.line
                 border.width: 1
@@ -300,7 +483,25 @@ ApplicationWindow {
                         MetricBox { label: "Changed"; value: folderController.changedCount; accent: colors.bad }
                         MetricBox { label: "Matching"; value: folderController.matchingCount; accent: colors.good }
                         MetricBox { label: "Folders"; value: folderController.folderDiffCount; accent: colors.faint }
-                        MetricBox { label: "Size"; value: folderController.totalSizeText; accent: colors.faint }
+                        MetricBox { label: "Scanned"; value: folderController.totalSizeText; accent: colors.faint }
+                    }
+
+                    ProgressBar {
+                        Layout.fillWidth: true
+                        visible: folderController.busy
+                        from: 0
+                        to: 100
+                        value: 0
+                        background: Rectangle {
+                            radius: 3
+                            color: colors.panelAlt
+                            border.color: colors.line
+                            border.width: 1
+                        }
+                        contentItem: Rectangle {
+                            radius: 3
+                            color: colors.accent
+                        }
                     }
 
                     RowLayout {
@@ -310,13 +511,30 @@ ApplicationWindow {
                             model: 6
                             delegate: Button {
                                 required property int index
-                                text: filterLabel(index)
+                                Layout.fillWidth: true
+                                text: filterLabel(index) + (filterCount(index) > 0 ? " (" + filterCount(index) + ")" : "")
                                 checkable: true
                                 checked: activeFilter === index
+                                enabled: filterCount(index) > 0 || index === 0
                                 onClicked: {
                                     activeFilter = index
                                     folderController.setFilterMode(index)
                                 }
+                                background: Rectangle {
+                                    radius: 5
+                                    color: parent.checked ? colors.accent : colors.panelAlt
+                                    border.color: parent.checked ? colors.accentDark : colors.line
+                                    border.width: 1
+                                }
+                                contentItem: Text {
+                                    text: parent.text
+                                    color: parent.enabled ? (parent.checked ? "#fff7ee" : colors.text) : colors.faint
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 11
+                                }
+                                ToolTip.visible: hovered && !enabled
+                                ToolTip.text: "No results for this filter"
                             }
                         }
                     }
@@ -337,14 +555,16 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 30
                         Repeater {
-                            model: ["Status", "Relative Path", "Size A", "Size B", "Checksum A", "Checksum B"]
+                            model: ["Status", "Relative Path", "Size A", "Size B", showChecksums ? "Checksum A" : "", showChecksums ? "Checksum B" : ""]
                             delegate: Rectangle {
                                 required property string modelData
                                 required property int index
-                                width: [110, 360, 80, 80, 200, 200][index]
+                                width: modelData === "" ? 0 : columnWidths[index]
                                 height: 30
+                                visible: modelData !== ""
                                 color: colors.panelAlt
                                 border.color: colors.line
+                                border.width: 1
                                 Label {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
@@ -372,7 +592,7 @@ ApplicationWindow {
                             columnSpacing: 0
                             rowSpacing: 0
                             columnWidthProvider: function(column) {
-                                return [110, 360, 80, 80, 200, 200][column]
+                                return columnWidths[column]
                             }
                             rowHeightProvider: function() { return 34 }
 
@@ -391,12 +611,24 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
                                     anchors.rightMargin: 8
-                                    text: display
+                                    text: column === 0 ? statusText(statusCode) : display
                                     color: column === 0 ? statusColor(statusCode) : colors.text
                                     elide: column === 1 ? Text.ElideMiddle : Text.ElideRight
                                     verticalAlignment: Text.AlignVCenter
                                     font.pixelSize: 12
-                                    font.family: column === 1 || column >= 4 ? window.monoFont : "Manrope"
+                                    font.family: column === 1 || column >= 4 ? window.monoFont : window.uiFont
+
+                                    ToolTip.visible: truncated && mouseArea.containsMouse
+                                    ToolTip.text: text
+                                    ToolTip.delay: 500
+                                }
+
+                                MouseArea {
+                                    id: mouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: parent.color = Qt.lighter(parent.color, 1.15)
+                                    onExited: parent.color = row % 2 === 0 ? colors.panel : colors.panelAlt
                                 }
                             }
 
@@ -413,7 +645,7 @@ ApplicationWindow {
                             Label {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width - 80, 520)
-                                text: folderController.busy ? "Comparison running." : "Choose two folders and start comparison."
+                                text: folderController.busy ? "Comparison running..." : "Choose two folders and start comparison."
                                 color: colors.muted
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
@@ -426,7 +658,7 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 128
+                Layout.preferredHeight: 80
                 color: colors.panel
                 border.color: colors.line
                 border.width: 1
@@ -434,10 +666,11 @@ ApplicationWindow {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 12
-                    spacing: 8
+                    spacing: 6
 
                     RowLayout {
                         Layout.fillWidth: true
+                        spacing: 8
                         Label {
                             text: "STATUS"
                             color: colors.muted
@@ -451,6 +684,23 @@ ApplicationWindow {
                             elide: Text.ElideMiddle
                             font.pixelSize: 12
                             font.family: window.monoFont
+                        }
+                        Button {
+                            text: "Clear"
+                            onClicked: folderController.clearLog()
+                            background: Rectangle {
+                                radius: 4
+                                color: parent.down ? colors.accentDark : colors.panelAlt
+                                border.color: colors.line
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: colors.muted
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 11
+                            }
                         }
                     }
 
@@ -478,24 +728,84 @@ ApplicationWindow {
         property string label
         property string path
         property var action
+        property var onDroppedFolder
 
         Layout.fillWidth: true
         spacing: 6
 
         RowLayout {
             Layout.fillWidth: true
+            spacing: 8
+
             Button {
                 text: label
                 enabled: !folderController.busy
                 onClicked: action()
+                background: Rectangle {
+                    radius: 5
+                    color: parent.down ? colors.accentDark : colors.panelAlt
+                    border.color: colors.line
+                    border.width: 1
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: colors.text
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: 12
+                }
             }
-            Label {
+
+            Rectangle {
                 Layout.fillWidth: true
-                text: path.length > 0 ? path : "No folder selected"
-                color: path.length > 0 ? colors.text : colors.faint
-                elide: Text.ElideMiddle
-                font.family: window.monoFont
-                font.pixelSize: 11
+                Layout.preferredHeight: 30
+                radius: 5
+                color: path.length > 0 ? colors.panelAlt : colors.bg
+                border.color: dragArea.containsDrag ? colors.accent : colors.line
+                border.width: dragArea.containsDrag ? 2 : 1
+
+                Label {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    text: path.length > 0 ? path : "Drop folder here or click button"
+                    color: path.length > 0 ? colors.text : colors.faint
+                    elide: Text.ElideMiddle
+                    font.family: window.monoFont
+                    font.pixelSize: 11
+                    verticalAlignment: Text.AlignVCenter
+
+                    ToolTip.visible: truncated && hoverArea.containsMouse
+                    ToolTip.text: path
+                    ToolTip.delay: 500
+                }
+
+                MouseArea {
+                    id: hoverArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                }
+
+                DropArea {
+                    id: dragArea
+                    anchors.fill: parent
+                    enabled: !folderController.busy
+                    onDropped: function(drop) {
+                        if (drop.hasUrls) {
+                            for (var i = 0; i < drop.urls.length; i++) {
+                                var url = drop.urls[i]
+                                if (url.startsWith("file:///")) {
+                                    var localPath = url.substring(8)
+                                    if (Qt.platform.os === "windows" && localPath.startsWith("/")) {
+                                        localPath = localPath.substring(1)
+                                    }
+                                    onDroppedFolder(localPath)
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -531,4 +841,6 @@ ApplicationWindow {
             }
         }
     }
+
+    property var columnWidths: showChecksums ? [110, 320, 80, 80, 170, 170] : [110, 400, 100, 100, 0, 0]
 }

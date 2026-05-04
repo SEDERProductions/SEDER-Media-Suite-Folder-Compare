@@ -165,11 +165,16 @@ void FolderCompareController::startComparison()
         return;
     }
 
+    const bool hadReport = hasReport();
     if (m_report) {
         sfc_report_free(m_report);
         m_report = nullptr;
+        if (hadReport) {
+            emit hasReportChanged();
+        }
     }
     m_tableModel.clear();
+    emit totalRowsChanged();
     resetSummary();
 
     auto *thread = new QThread(this);
@@ -264,6 +269,17 @@ void FolderCompareController::setFilterMode(int mode)
     m_filterModel.setFilterMode(mode);
 }
 
+void FolderCompareController::clearLog()
+{
+    m_logEntries.clear();
+    emit logEntriesChanged();
+}
+
+int FolderCompareController::totalRows() const
+{
+    return m_tableModel.totalRows();
+}
+
 void FolderCompareController::handleProgress(int stage, qulonglong current, qulonglong total, const QString &path)
 {
     const QString label = progressLabel(stage, current, total, path);
@@ -305,6 +321,8 @@ void FolderCompareController::handleFinished(SfcReport *report, const QString &e
     }
     m_report = report;
     m_tableModel.loadFromReport(m_report);
+    emit totalRowsChanged();
+    emit hasReportChanged();
     loadSummary(m_report);
     setStatusText(QStringLiteral("Comparison complete."));
     setProgressText(QStringLiteral("Complete"));
@@ -377,12 +395,12 @@ bool FolderCompareController::hasReport() const
 
 QString FolderCompareController::pickFolder(const QString &title, const QString &current)
 {
-    return QFileDialog::getExistingDirectory(nullptr, title, current);
+    return QFileDialog::getExistingDirectory(QGuiApplication::focusWindow(), title, current);
 }
 
 QString FolderCompareController::savePath(const QString &title, const QString &defaultName, const QString &filter)
 {
-    return QFileDialog::getSaveFileName(nullptr, title, defaultName, filter);
+    return QFileDialog::getSaveFileName(QGuiApplication::focusWindow(), title, defaultName, filter);
 }
 
 QString FolderCompareController::formatBytes(qulonglong bytes)

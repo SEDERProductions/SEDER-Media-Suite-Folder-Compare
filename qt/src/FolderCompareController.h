@@ -33,6 +33,8 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(int onlyBCount READ onlyBCount NOTIFY summaryChanged)
     Q_PROPERTY(int folderDiffCount READ folderDiffCount NOTIFY summaryChanged)
     Q_PROPERTY(QString totalSizeText READ totalSizeText NOTIFY summaryChanged)
+    Q_PROPERTY(bool hasReport READ hasReport NOTIFY hasReportChanged)
+    Q_PROPERTY(int totalRows READ totalRows NOTIFY totalRowsChanged)
 
 public:
     explicit FolderCompareController(QObject *parent = nullptr);
@@ -57,6 +59,8 @@ public:
     int onlyBCount() const;
     int folderDiffCount() const;
     QString totalSizeText() const;
+    bool hasReport() const;
+    int totalRows() const;
 
     void setFolderA(const QString &folder);
     void setFolderB(const QString &folder);
@@ -72,6 +76,7 @@ public:
     Q_INVOKABLE void exportTxt();
     Q_INVOKABLE void exportCsv();
     Q_INVOKABLE void setFilterMode(int mode);
+    Q_INVOKABLE void clearLog();
 
 signals:
     void folderAChanged();
@@ -86,6 +91,8 @@ signals:
     void effectiveDarkChanged();
     void logEntriesChanged();
     void summaryChanged();
+    void hasReportChanged();
+    void totalRowsChanged();
 
 private slots:
     void handleProgress(int stage, qulonglong current, qulonglong total, const QString &path);
