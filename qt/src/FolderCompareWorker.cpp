@@ -1,20 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "FolderCompareWorker.h"
+#include "FolderCompareUtils.h"
 
 #include <QByteArray>
-
-namespace {
-QString takeError(char *error)
-{
-    if (!error) {
-        return {};
-    }
-    const QString message = QString::fromUtf8(error);
-    sfc_string_free(error);
-    return message;
-}
-}
 
 FolderCompareWorker::FolderCompareWorker(
     QString folderA,

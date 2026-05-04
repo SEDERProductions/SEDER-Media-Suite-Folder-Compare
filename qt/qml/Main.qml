@@ -15,7 +15,6 @@ ApplicationWindow {
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
-    property bool sidebarCollapsed: false
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
@@ -85,87 +84,8 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 86
-            color: colors.rail
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 14
-
-                Label {
-                    text: "SEDER"
-                    color: "#ece6d9"
-                    font.pixelSize: 13
-                    font.bold: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 68
-                    radius: 6
-                    color: colors.accent
-                    border.color: "#d8653e"
-                    border.width: 1
-
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 4
-                        Label {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: "FC"
-                            color: "#fff7ee"
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-                        Label {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: "COMPARE"
-                            color: "#fff7ee"
-                            font.pixelSize: 8
-                            font.family: window.monoFont
-                        }
-                    }
-                }
-
-                Item { Layout.fillHeight: true }
-
-                Button {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: sidebarCollapsed ? "\u25b6" : "\u25c0"
-                    font.pixelSize: 14
-                    onClicked: sidebarCollapsed = !sidebarCollapsed
-                    background: Rectangle {
-                        radius: 4
-                        color: parent.down ? colors.accentDark : "transparent"
-                        border.color: colors.faint
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        text: parent.text
-                        color: "#b8ae9b"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    ToolTip.visible: hovered
-                    ToolTip.text: sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-                }
-
-                Label {
-                    text: "LOCAL"
-                    color: "#b8ae9b"
-                    font.pixelSize: 10
-                    font.family: window.monoFont
-                    Layout.alignment: Qt.AlignHCenter
-                }
-            }
-        }
-
-        Rectangle {
-            Layout.fillHeight: true
-            Layout.preferredWidth: sidebarCollapsed ? 0 : 368
-            visible: !sidebarCollapsed
+            Layout.preferredWidth: 368
+            visible: true
             color: colors.panel
             border.color: colors.line
             border.width: 1
@@ -192,7 +112,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: "v0.1.2"
+                            text: "v0.1.4"
                             color: colors.muted
                             font.pixelSize: 10
                             font.family: window.monoFont
@@ -490,8 +410,8 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         visible: folderController.busy
                         from: 0
-                        to: 100
-                        value: 0
+                        to: folderController.progressTotal > 0 ? folderController.progressTotal : 100
+                        value: folderController.progressTotal > 0 ? folderController.progressCurrent : 0
                         background: Rectangle {
                             radius: 3
                             color: colors.panelAlt

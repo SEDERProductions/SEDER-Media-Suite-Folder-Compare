@@ -11,7 +11,7 @@ export CMAKE_PREFIX_PATH="$(brew --prefix qt)"
 
 ## Build
 
-From `desktop/seder-folder-compare`:
+From the repository root:
 
 ```sh
 cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"

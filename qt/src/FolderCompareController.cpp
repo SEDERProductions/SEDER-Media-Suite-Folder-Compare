@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "FolderCompareController.h"
+#include "FolderCompareUtils.h"
 
 #include <QDateTime>
 #include <QFileDialog>
@@ -41,7 +42,10 @@ FolderCompareController::~FolderCompareController()
     }
     if (m_thread) {
         m_thread->quit();
-        m_thread->wait(1500);
+        if (!m_thread->wait(30000)) {
+            m_thread->terminate();
+            m_thread->wait();
+        }
     }
     if (m_report) {
         sfc_report_free(m_report);
@@ -175,6 +179,9 @@ void FolderCompareController::startComparison()
     }
     m_tableModel.clear();
     emit totalRowsChanged();
+    m_progressCurrent = 0;
+    m_progressTotal = 0;
+    emit progressChanged();
     resetSummary();
 
     auto *thread = new QThread(this);
@@ -280,8 +287,22 @@ int FolderCompareController::totalRows() const
     return m_tableModel.totalRows();
 }
 
+qulonglong FolderCompareController::progressCurrent() const
+{
+    return m_progressCurrent;
+}
+
+qulonglong FolderCompareController::progressTotal() const
+{
+    return m_progressTotal;
+}
+
 void FolderCompareController::handleProgress(int stage, qulonglong current, qulonglong total, const QString &path)
 {
+    m_progressCurrent = current;
+    m_progressTotal = total;
+    emit progressChanged();
+
     const QString label = progressLabel(stage, current, total, path);
     setProgressText(label);
     if (stage == SFC_PROGRESS_FAILED || stage == SFC_PROGRESS_CANCELED || stage == SFC_PROGRESS_COMPLETE) {
@@ -292,6 +313,9 @@ void FolderCompareController::handleProgress(int stage, qulonglong current, qulo
 void FolderCompareController::handleFinished(SfcReport *report, const QString &errorMessage, bool canceled)
 {
     setBusy(false);
+    m_progressCurrent = 0;
+    m_progressTotal = 0;
+    emit progressChanged();
     m_worker = nullptr;
     m_thread = nullptr;
 
@@ -406,16 +430,6 @@ QString FolderCompareController::savePath(const QString &title, const QString &d
 QString FolderCompareController::formatBytes(qulonglong bytes)
 {
     return QLocale().formattedDataSize(bytes, 1, QLocale::DataSizeTraditionalFormat);
-}
-
-QString FolderCompareController::takeError(char *error)
-{
-    if (!error) {
-        return {};
-    }
-    const QString message = QString::fromUtf8(error);
-    sfc_string_free(error);
-    return message;
 }
 
 QString FolderCompareController::progressLabel(int stage, qulonglong current, qulonglong total, const QString &path)

@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SederFolderCompareQt VERSION 0.1.0 LANGUAGES CXX)
+project(SederFolderCompareQt VERSION 0.1.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,7 @@ set(APP_SOURCES
     src/FolderCompareController.h
     src/FolderCompareWorker.cpp
     src/FolderCompareWorker.h
+    src/FolderCompareUtils.h
 )
 
 set(SEDER_APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.icns")

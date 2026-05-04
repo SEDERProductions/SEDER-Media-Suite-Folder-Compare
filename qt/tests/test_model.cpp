@@ -30,6 +30,8 @@ private slots:
         QVector<CompareRow> rows;
         rows.push_back(CompareRow{QStringLiteral("match.mov"), QStringLiteral("Matching"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::Matching, false});
         rows.push_back(CompareRow{QStringLiteral("changed.mov"), QStringLiteral("Changed"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::Changed, false});
+        rows.push_back(CompareRow{QStringLiteral("only-a.mov"), QStringLiteral("Only in A"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::OnlyInA, false});
+        rows.push_back(CompareRow{QStringLiteral("only-b.mov"), QStringLiteral("Only in B"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::OnlyInB, false});
         rows.push_back(CompareRow{QStringLiteral("folder"), QStringLiteral("Folder only in A"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::FolderOnlyInA, true});
         model.setRows(rows);
 
@@ -37,11 +39,23 @@ private slots:
         proxy.setSourceModel(&model);
 
         proxy.setFilterMode(CompareFilterProxyModel::All);
-        QCOMPARE(proxy.rowCount(), 3);
+        QCOMPARE(proxy.rowCount(), 5);
+
+        proxy.setFilterMode(CompareFilterProxyModel::Matching);
+        QCOMPARE(proxy.rowCount(), 1);
+        QCOMPARE(proxy.data(proxy.index(0, 1), Qt::DisplayRole).toString(), QStringLiteral("match.mov"));
 
         proxy.setFilterMode(CompareFilterProxyModel::Changed);
         QCOMPARE(proxy.rowCount(), 1);
         QCOMPARE(proxy.data(proxy.index(0, 1), Qt::DisplayRole).toString(), QStringLiteral("changed.mov"));
+
+        proxy.setFilterMode(CompareFilterProxyModel::OnlyA);
+        QCOMPARE(proxy.rowCount(), 1);
+        QCOMPARE(proxy.data(proxy.index(0, 1), Qt::DisplayRole).toString(), QStringLiteral("only-a.mov"));
+
+        proxy.setFilterMode(CompareFilterProxyModel::OnlyB);
+        QCOMPARE(proxy.rowCount(), 1);
+        QCOMPARE(proxy.data(proxy.index(0, 1), Qt::DisplayRole).toString(), QStringLiteral("only-b.mov"));
 
         proxy.setFilterMode(CompareFilterProxyModel::Folders);
         QCOMPARE(proxy.rowCount(), 1);

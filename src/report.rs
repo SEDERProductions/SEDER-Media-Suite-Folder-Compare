@@ -131,7 +131,12 @@ pub fn report_csv(report: &CompareReport) -> String {
     for row in &report.rows {
         out.push_str(&format!(
             "{},{},{},{},{},{},{},{}\n",
-            csv_cell(format!("{:?}", row.status)),
+            csv_cell(match row.status {
+                FileStatus::Matching => "Matching",
+                FileStatus::Changed => "Changed",
+                FileStatus::OnlyInA => "OnlyInA",
+                FileStatus::OnlyInB => "OnlyInB",
+            }),
             csv_cell(&row.relative_path),
             csv_cell(
                 row.size_a

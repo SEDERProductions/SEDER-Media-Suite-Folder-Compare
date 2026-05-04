@@ -174,6 +174,8 @@ pub fn parse_ignore_patterns(patterns: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// Basic wildcard matching supporting only `*` (any sequence) and `?` (single char).
+/// Does not support `**` (globstar), character classes `[...]`, or alternation `{a,b}`.
 fn wildcard_match(pattern: &str, text: &str) -> bool {
     let pattern = pattern.chars().collect::<Vec<_>>();
     let text = text.chars().collect::<Vec<_>>();
@@ -499,6 +501,7 @@ pub fn compare_scans_with_progress(
         folders_only_in_b: b.folders.difference(&a.folders).cloned().collect(),
         total_files: total_keys,
         total_folders: a.folders.union(&b.folders).count(),
+        // Combined size of both sides (a file present on both sides counts twice)
         total_size: a.total_size + b.total_size,
     })
 }

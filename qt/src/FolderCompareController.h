@@ -35,6 +35,8 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(QString totalSizeText READ totalSizeText NOTIFY summaryChanged)
     Q_PROPERTY(bool hasReport READ hasReport NOTIFY hasReportChanged)
     Q_PROPERTY(int totalRows READ totalRows NOTIFY totalRowsChanged)
+    Q_PROPERTY(qulonglong progressCurrent READ progressCurrent NOTIFY progressChanged)
+    Q_PROPERTY(qulonglong progressTotal READ progressTotal NOTIFY progressChanged)
 
 public:
     explicit FolderCompareController(QObject *parent = nullptr);
@@ -61,6 +63,8 @@ public:
     QString totalSizeText() const;
     bool hasReport() const;
     int totalRows() const;
+    qulonglong progressCurrent() const;
+    qulonglong progressTotal() const;
 
     void setFolderA(const QString &folder);
     void setFolderB(const QString &folder);
@@ -93,6 +97,7 @@ signals:
     void summaryChanged();
     void hasReportChanged();
     void totalRowsChanged();
+    void progressChanged();
 
 private slots:
     void handleProgress(int stage, qulonglong current, qulonglong total, const QString &path);
@@ -108,7 +113,6 @@ private:
     QString pickFolder(const QString &title, const QString &current);
     QString savePath(const QString &title, const QString &defaultName, const QString &filter);
     static QString formatBytes(qulonglong bytes);
-    static QString takeError(char *error);
     static QString progressLabel(int stage, qulonglong current, qulonglong total, const QString &path);
 
     QString m_folderA;
@@ -132,4 +136,6 @@ private:
     int m_onlyBCount = 0;
     int m_folderDiffCount = 0;
     QString m_totalSizeText;
+    qulonglong m_progressCurrent = 0;
+    qulonglong m_progressTotal = 0;
 };
