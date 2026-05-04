@@ -14,8 +14,8 @@ private slots:
     {
         CompareResultTableModel model;
         QVector<CompareRow> rows;
-        rows.push_back({QStringLiteral("A001/clip.mov"), QStringLiteral("Matching"), QStringLiteral("4 B"), QStringLiteral("4 B"), {}, {}, CompareRow::Matching, false});
-        rows.push_back({QStringLiteral("A001/audio.wav"), QStringLiteral("Changed"), QStringLiteral("8 B"), QStringLiteral("12 B"), {}, {}, CompareRow::Changed, false});
+        rows.push_back(CompareRow{QStringLiteral("A001/clip.mov"), QStringLiteral("Matching"), QStringLiteral("4 B"), QStringLiteral("4 B"), {}, {}, QString{}, QString{}, CompareRow::Matching, false});
+        rows.push_back(CompareRow{QStringLiteral("A001/audio.wav"), QStringLiteral("Changed"), QStringLiteral("8 B"), QStringLiteral("12 B"), {}, {}, QString{}, QString{}, CompareRow::Changed, false});
         model.setRows(rows);
 
         QCOMPARE(model.rowCount(), 2);
@@ -28,9 +28,9 @@ private slots:
     {
         CompareResultTableModel model;
         QVector<CompareRow> rows;
-        rows.push_back({QStringLiteral("match.mov"), QStringLiteral("Matching"), {}, {}, {}, {}, CompareRow::Matching, false});
-        rows.push_back({QStringLiteral("changed.mov"), QStringLiteral("Changed"), {}, {}, {}, {}, CompareRow::Changed, false});
-        rows.push_back({QStringLiteral("folder"), QStringLiteral("Folder only in A"), {}, {}, {}, {}, CompareRow::FolderOnlyInA, true});
+        rows.push_back(CompareRow{QStringLiteral("match.mov"), QStringLiteral("Matching"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::Matching, false});
+        rows.push_back(CompareRow{QStringLiteral("changed.mov"), QStringLiteral("Changed"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::Changed, false});
+        rows.push_back(CompareRow{QStringLiteral("folder"), QStringLiteral("Folder only in A"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::FolderOnlyInA, true});
         model.setRows(rows);
 
         CompareFilterProxyModel proxy;
@@ -52,7 +52,7 @@ private slots:
     {
         CompareResultTableModel model;
         QSignalSpy spy(&model, &CompareResultTableModel::rowsChanged);
-        model.setRows({{QStringLiteral("clip.mov"), QStringLiteral("Matching"), {}, {}, {}, {}, CompareRow::Matching, false}});
+        model.setRows({CompareRow{QStringLiteral("clip.mov"), QStringLiteral("Matching"), {}, {}, {}, {}, QString{}, QString{}, CompareRow::Matching, false}});
         QCOMPARE(spy.count(), 1);
     }
 };

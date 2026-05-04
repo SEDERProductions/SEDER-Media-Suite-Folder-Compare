@@ -20,7 +20,7 @@ jobs:
   tag:
     name: Tag release
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore: bump version to')
+    if: "github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore: bump version to')"
     outputs:
       release_tag: ${{ steps.bump.outputs.release_tag }}
     steps:
@@ -105,7 +105,7 @@ jobs:
           echo "Artifact release tag: $release_tag"
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           ref: ${{ steps.vars.outputs.release_tag }}
           fetch-depth: 0
