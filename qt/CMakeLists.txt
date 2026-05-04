@@ -48,20 +48,6 @@ set(APP_SOURCES
     src/FolderCompareWorker.h
 )
 
-qt_add_resources(ICON_RESOURCES icon_resources
-    PREFIX "/"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
-    FILES
-        "assets/icon.svg"
-)
-
-qt_add_resources(QML_RESOURCES qml_resources
-    PREFIX "/"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}"
-    FILES
-        "qml/Main.qml"
-)
-
 set(SEDER_APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.icns")
 set(SEDER_APP_ICON_WINDOWS_RC "${CMAKE_CURRENT_SOURCE_DIR}/app.rc")
 
@@ -78,9 +64,19 @@ endif()
 qt_add_executable(seder-folder-compare-qt
     WIN32
     ${APP_SOURCES}
-    ${ICON_RESOURCES}
-    ${QML_RESOURCES}
     ${SEDER_APP_PLATFORM_SOURCES}
+)
+
+qt_add_resources(seder-folder-compare-qt icon_resources
+    PREFIX "/"
+    FILES
+        "../assets/icon.svg"
+)
+
+qt_add_resources(seder-folder-compare-qt qml_resources
+    PREFIX "/"
+    FILES
+        "qml/Main.qml"
 )
 
 target_include_directories(seder-folder-compare-qt PRIVATE
