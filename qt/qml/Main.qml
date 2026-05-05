@@ -20,6 +20,7 @@ ApplicationWindow {
     readonly property bool showChecksums: folderController.mode === 2
     readonly property real railWidthRatio: width < 1200 ? 0.34 : 0.3
     readonly property int leftRailWidth: Math.max(300, Math.min(420, Math.round(width * railWidthRatio)))
+    readonly property string appVersionLabel: Qt.application.version && Qt.application.version.length > 0 ? Qt.application.version : "0.1.4"
 
     QtObject {
         id: colors
@@ -129,7 +130,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: "v0.1.4"
+                            text: "v" + window.appVersionLabel
                             color: colors.muted
                             font.pixelSize: 12
                             font.family: window.monoFont
