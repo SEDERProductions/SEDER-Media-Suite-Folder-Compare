@@ -6,12 +6,14 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: window
-    width: 1320
-    height: 860
+    width: Math.min(1320, Screen.availableGeometry.width * 0.9)
+    height: Math.min(860, Screen.availableGeometry.height * 0.9)
     minimumWidth: Qt.platform.os === "osx" ? 980 : 960
     minimumHeight: Qt.platform.os === "osx" ? 620 : 600
     visible: true
     title: "SEDER Folder Compare"
+    x: (Screen.availableGeometry.width - width) / 2
+    y: (Screen.availableGeometry.height - height) / 2
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
@@ -112,6 +114,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 anchors.margins: 16
                 clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 ColumnLayout {
                     width: parent.width
