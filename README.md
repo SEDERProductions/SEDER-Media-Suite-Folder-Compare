@@ -45,6 +45,12 @@ sudo apt-get update
 sudo apt-get install -y build-essential cmake ninja-build qt6-base-dev qt6-declarative-dev qt6-tools-dev
 ```
 
+Regenerate application icons from the canonical SVG source:
+
+```sh
+python3 scripts/generate-icons.py .
+```
+
 Configure and build:
 
 ```sh
@@ -84,4 +90,3 @@ The workflow uploads release assets and `SHA256SUMS.txt` to the matching GitHub 
 Code is licensed under `GPL-3.0-only`. See [LICENSE](LICENSE).
 
 The SEDER and Seder Productions names, logos, and marks are not granted as trademarks by the GPL license. See [TRADEMARKS.md](TRADEMARKS.md).
-

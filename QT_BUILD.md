@@ -13,6 +13,14 @@ export CMAKE_PREFIX_PATH="$(brew --prefix qt)"
 
 From the repository root:
 
+Regenerate application icons from the canonical source asset (`assets/icon.svg`):
+
+```sh
+python3 scripts/generate-icons.py .
+```
+
+Then configure/build:
+
 ```sh
 cmake -S qt -B build/qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
 cmake --build build/qt
