@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QStringList>
+#include <QVariantMap>
 
 class QThread;
 
@@ -83,6 +84,7 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void exportCsv();
     Q_INVOKABLE void setFilterMode(int mode);
     Q_INVOKABLE void clearLog();
+    Q_INVOKABLE QVariantMap parseDroppedFolderUrl(const QString& droppedUrl) const;
 
   signals:
     void folderAChanged();

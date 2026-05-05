@@ -5,11 +5,14 @@
 
 #include <QApplication>
 #include <QDateTime>
+#include <QDir>
+#include <QFileInfo>
 #include <QFileDialog>
 #include <QLocale>
 #include <QSettings>
 #include <QStyleHints>
 #include <QThread>
+#include <QUrl>
 
 namespace {
 constexpr auto defaultPatterns = ".DS_Store, Thumbs.db, desktop.ini, .Spotlight-V100, .Trashes";
@@ -299,6 +302,25 @@ void FolderCompareController::setFilterMode(int mode) {
 void FolderCompareController::clearLog() {
     m_logEntries.clear();
     emit logEntriesChanged();
+}
+
+QVariantMap FolderCompareController::parseDroppedFolderUrl(const QString& droppedUrl) const {
+    const QUrl url = QUrl::fromUserInput(droppedUrl.trimmed());
+    if (!url.isValid() || !url.isLocalFile()) {
+        return {{QStringLiteral("error"), QStringLiteral("Dropped item is not a local folder URL.")}};
+    }
+
+    const QString localPath = QDir::cleanPath(url.toLocalFile());
+    if (localPath.isEmpty()) {
+        return {{QStringLiteral("error"), QStringLiteral("Could not read a local folder path from drop data.")}};
+    }
+
+    const QFileInfo info(localPath);
+    if (!info.exists() || !info.isDir()) {
+        return {{QStringLiteral("error"), QStringLiteral("Dropped item is not an existing folder path.")}};
+    }
+
+    return {{QStringLiteral("path"), QDir::toNativeSeparators(localPath)}};
 }
 
 int FolderCompareController::totalRows() const {

@@ -640,7 +640,6 @@ ApplicationWindow {
                         }
                     }
                 }
-            }
         }
     }
 
@@ -649,6 +648,7 @@ ApplicationWindow {
         property string path
         property var action
         property var onDroppedFolder
+        property string validationError: ""
 
         Layout.fillWidth: true
         spacing: 6
@@ -711,21 +711,36 @@ ApplicationWindow {
                     anchors.fill: parent
                     enabled: !folderController.busy
                     onDropped: function(drop) {
-                        if (drop.hasUrls) {
-                            for (var i = 0; i < drop.urls.length; i++) {
-                                var url = drop.urls[i]
-                                if (url.startsWith("file:///")) {
-                                    var localPath = url.substring(8)
-                                    if (Qt.platform.os === "windows" && localPath.startsWith("/")) {
-                                        localPath = localPath.substring(1)
-                                    }
-                                    onDroppedFolder(localPath)
-                                    break
-                                }
+                        validationError = ""
+                        if (!drop.hasUrls || drop.urls.length === 0) {
+                            validationError = "Drop a folder from your file manager."
+                            return
+                        }
+
+                        var accepted = false
+                        for (var i = 0; i < drop.urls.length; i++) {
+                            var result = folderController.parseDroppedFolderUrl(drop.urls[i].toString())
+                            if (result.path) {
+                                onDroppedFolder(result.path)
+                                accepted = true
+                                break
                             }
+                        }
+
+                        if (!accepted) {
+                            validationError = "Dropped item is not a valid folder path."
                         }
                     }
                 }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: validationError.length > 0
+                text: validationError
+                color: colors.bad
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
             }
         }
     }
