@@ -547,11 +547,18 @@ ApplicationWindow {
                                 required property int column
                                 required property string display
                                 required property int statusCode
+                                readonly property bool hovered: mouseArea.containsMouse
+                                readonly property color baseColor: row % 2 === 0 ? colors.panel : colors.panelAlt
+                                readonly property color hoverColor: darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
                                 implicitWidth: tableView.columnWidthProvider(column)
                                 implicitHeight: 34
-                                color: row % 2 === 0 ? colors.panel : colors.panelAlt
+                                color: hovered ? hoverColor : baseColor
                                 border.color: colors.line
                                 border.width: 1
+
+                                Behavior on color {
+                                    ColorAnimation { duration: 90 }
+                                }
 
                                 Text {
                                     anchors.fill: parent
@@ -573,8 +580,6 @@ ApplicationWindow {
                                     id: mouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onEntered: parent.color = Qt.lighter(parent.color, 1.15)
-                                    onExited: parent.color = row % 2 === 0 ? colors.panel : colors.panelAlt
                                 }
                             }
 
