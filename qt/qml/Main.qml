@@ -675,6 +675,7 @@ ApplicationWindow {
                 }
         }
     }
+    }
 
     component FolderPicker: ColumnLayout {
         property string label
