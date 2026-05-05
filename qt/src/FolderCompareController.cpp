@@ -14,6 +14,30 @@
 namespace {
 constexpr auto defaultPatterns = ".DS_Store, Thumbs.db, desktop.ini, .Spotlight-V100, .Trashes";
 constexpr auto reportTitle = "SEDER Media Suite Folder Compare Report";
+
+template <typename T, typename ChangedSignal>
+bool assignPropertyIfChanged(T& current, const T& next, ChangedSignal changedSignal,
+                             FolderCompareController* controller) {
+    if (current == next) {
+        return false;
+    }
+    current = next;
+    (controller->*changedSignal)();
+    return true;
+}
+
+template <typename T, typename ChangedSignal>
+bool assignAndPersistPropertyIfChanged(T& current, const T& next, const QString& settingsKey,
+                                       ChangedSignal changedSignal,
+                                       FolderCompareController* controller) {
+    if (current == next) {
+        return false;
+    }
+    current = next;
+    QSettings().setValue(settingsKey, QVariant::fromValue(next));
+    (controller->*changedSignal)();
+    return true;
+}
 } // namespace
 
 FolderCompareController::FolderCompareController(QObject* parent)
@@ -116,58 +140,36 @@ QString FolderCompareController::totalSizeText() const {
 }
 
 void FolderCompareController::setFolderA(const QString& folder) {
-    if (m_folderA == folder) {
-        return;
-    }
-    m_folderA = folder;
-    emit folderAChanged();
+    assignPropertyIfChanged(m_folderA, folder, &FolderCompareController::folderAChanged, this);
 }
 
 void FolderCompareController::setFolderB(const QString& folder) {
-    if (m_folderB == folder) {
-        return;
-    }
-    m_folderB = folder;
-    emit folderBChanged();
+    assignPropertyIfChanged(m_folderB, folder, &FolderCompareController::folderBChanged, this);
 }
 
 void FolderCompareController::setMode(int mode) {
-    if (m_mode == mode) {
-        return;
-    }
-    m_mode = mode;
-    emit modeChanged();
+    assignPropertyIfChanged(m_mode, mode, &FolderCompareController::modeChanged, this);
 }
 
 void FolderCompareController::setIgnoreHiddenSystem(bool ignore) {
-    if (m_ignoreHiddenSystem == ignore) {
-        return;
-    }
-    m_ignoreHiddenSystem = ignore;
-    QSettings().setValue(QStringLiteral("ignoreHiddenSystem"), ignore);
-    emit ignoreHiddenSystemChanged();
+    assignAndPersistPropertyIfChanged(m_ignoreHiddenSystem, ignore,
+                                      QStringLiteral("ignoreHiddenSystem"),
+                                      &FolderCompareController::ignoreHiddenSystemChanged, this);
 }
 
 void FolderCompareController::setIgnorePatterns(const QString& patterns) {
-    if (m_ignorePatterns == patterns) {
-        return;
-    }
-    m_ignorePatterns = patterns;
-    QSettings().setValue(QStringLiteral("ignorePatterns"), patterns);
-    emit ignorePatternsChanged();
+    assignAndPersistPropertyIfChanged(m_ignorePatterns, patterns, QStringLiteral("ignorePatterns"),
+                                      &FolderCompareController::ignorePatternsChanged, this);
 }
 
 void FolderCompareController::setTheme(const QString& theme) {
     const QString safeTheme = (theme == QStringLiteral("light") || theme == QStringLiteral("dark"))
                                   ? theme
                                   : QStringLiteral("system");
-    if (m_theme == safeTheme) {
-        return;
+    if (assignAndPersistPropertyIfChanged(m_theme, safeTheme, QStringLiteral("theme"),
+                                          &FolderCompareController::themeChanged, this)) {
+        emit effectiveDarkChanged();
     }
-    m_theme = safeTheme;
-    QSettings().setValue(QStringLiteral("theme"), safeTheme);
-    emit themeChanged();
-    emit effectiveDarkChanged();
 }
 
 void FolderCompareController::chooseFolderA() {
