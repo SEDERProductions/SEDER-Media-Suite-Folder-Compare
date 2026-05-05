@@ -26,8 +26,8 @@ ApplicationWindow {
         readonly property color panelAlt: darkMode ? "#282521" : "#e3dccb"
         readonly property color rail: darkMode ? "#16140f" : "#2a261d"
         readonly property color text: darkMode ? "#ece6d9" : "#16140f"
-        readonly property color muted: darkMode ? "#ada596" : "#4a4438"
-        readonly property color faint: darkMode ? "#716a5f" : "#7a7363"
+        readonly property color muted: darkMode ? "#c4bcad" : "#3f392e"
+        readonly property color faint: darkMode ? "#948b7d" : "#5c5548"
         readonly property color line: darkMode ? "#3b362e" : "#d6cfbe"
         readonly property color accent: "#c63b13"
         readonly property color accentDark: "#8a3a16"
@@ -114,7 +114,7 @@ ApplicationWindow {
                         Label {
                             text: "v0.1.4"
                             color: colors.muted
-                            font.pixelSize: 10
+                            font.pixelSize: 12
                             font.family: window.monoFont
                         }
                     }
@@ -122,7 +122,7 @@ ApplicationWindow {
                     Label {
                         text: "01 / FOLDERS"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -142,7 +142,7 @@ ApplicationWindow {
                     Label {
                         text: "02 / COMPARE MODE"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -209,7 +209,7 @@ ApplicationWindow {
                     Label {
                         text: "03 / IGNORE"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -271,7 +271,7 @@ ApplicationWindow {
                     Label {
                         text: "04 / THEME"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -451,7 +451,7 @@ ApplicationWindow {
                                     color: parent.enabled ? (parent.checked ? "#fff7ee" : colors.text) : colors.faint
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 11
+                                    font.pixelSize: 12
                                 }
                                 ToolTip.visible: hovered && !enabled
                                 ToolTip.text: "No results for this filter"
@@ -492,7 +492,7 @@ ApplicationWindow {
                                     text: modelData
                                     color: colors.muted
                                     verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                     font.family: window.monoFont
                                 }
                             }
@@ -594,7 +594,7 @@ ApplicationWindow {
                         Label {
                             text: "STATUS"
                             color: colors.muted
-                            font.pixelSize: 10
+                            font.pixelSize: 12
                             font.family: window.monoFont
                         }
                         Label {
@@ -619,7 +619,7 @@ ApplicationWindow {
                                 color: colors.muted
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 11
+                                font.pixelSize: 12
                             }
                         }
                     }
@@ -635,7 +635,7 @@ ApplicationWindow {
                             text: modelData
                             color: colors.faint
                             elide: Text.ElideMiddle
-                            font.pixelSize: 11
+                            font.pixelSize: 12
                             font.family: window.monoFont
                         }
                     }
@@ -692,7 +692,7 @@ ApplicationWindow {
                     color: path.length > 0 ? colors.text : colors.faint
                     elide: Text.ElideMiddle
                     font.family: window.monoFont
-                    font.pixelSize: 11
+                    font.pixelSize: 12
                     verticalAlignment: Text.AlignVCenter
 
                     ToolTip.visible: truncated && hoverArea.containsMouse
@@ -749,7 +749,7 @@ ApplicationWindow {
             Label {
                 text: label.toUpperCase()
                 color: colors.muted
-                font.pixelSize: 9
+                font.pixelSize: 12
                 font.family: window.monoFont
             }
             Label {
