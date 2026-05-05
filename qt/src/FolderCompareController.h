@@ -102,8 +102,8 @@ class FolderCompareController final : public QObject {
     void progressChanged();
 
   private slots:
-    void handleProgress(int stage, qulonglong current, qulonglong total, const QString& path);
-    void handleFinished(SfcReport* report, const QString& errorMessage, bool canceled);
+    void handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total, const QString& path);
+    void handleFinished(SfcReport* report, const QString& errorMessage, SfcProgressStage terminalStage);
 
   private:
     void setBusy(bool busy);
@@ -115,7 +115,8 @@ class FolderCompareController final : public QObject {
     QString pickFolder(const QString& title, const QString& current);
     QString savePath(const QString& title, const QString& defaultName, const QString& filter);
     static QString formatBytes(qulonglong bytes);
-    static QString progressLabel(int stage, qulonglong current, qulonglong total,
+    static bool isTerminalStage(SfcProgressStage stage);
+    static QString progressLabel(SfcProgressStage stage, qulonglong current, qulonglong total,
                                  const QString& path);
 
     QString m_folderA;

@@ -23,7 +23,7 @@ void FolderCompareWorker::run() {
     SfcCompareRequest request{};
     request.folder_a = folderA.constData();
     request.folder_b = folderB.constData();
-    request.mode = modeFromIndex(m_mode);
+    request.mode = modeFromUiValue(m_mode);
     request.ignore_hidden_system = m_ignoreHiddenSystem;
     request.ignore_patterns = patterns.constData();
     request.progress = &FolderCompareWorker::progressCallback;
@@ -33,9 +33,7 @@ void FolderCompareWorker::run() {
     char* error = nullptr;
     SfcReport* report = sfc_compare_folders(&request, &error);
     const QString errorMessage = takeError(error);
-    const bool canceled =
-        isCanceled() || errorMessage.contains(QStringLiteral("canceled"), Qt::CaseInsensitive);
-    emit finished(report, errorMessage, canceled);
+    emit finished(report, errorMessage, static_cast<SfcProgressStage>(m_terminalStage.load()));
 }
 
 void FolderCompareWorker::cancel() {
@@ -48,7 +46,11 @@ void FolderCompareWorker::progressCallback(SfcProgressStage stage, uint64_t curr
     if (!worker) {
         return;
     }
-    emit worker->progress(static_cast<int>(stage), static_cast<qulonglong>(current),
+    if (stage == SFC_PROGRESS_CANCELED || stage == SFC_PROGRESS_FAILED ||
+        stage == SFC_PROGRESS_COMPLETE) {
+        worker->m_terminalStage.store(static_cast<int>(stage), std::memory_order_relaxed);
+    }
+    emit worker->progress(stage, static_cast<qulonglong>(current),
                           static_cast<qulonglong>(total),
                           path ? QString::fromUtf8(path) : QString());
 }
@@ -58,14 +60,11 @@ bool FolderCompareWorker::cancelCallback(void* userData) {
     return worker && worker->isCanceled();
 }
 
-SfcCompareMode FolderCompareWorker::modeFromIndex(int mode) {
-    switch (mode) {
-    case 1:
-        return SFC_COMPARE_PATH_SIZE_MODIFIED;
-    case 2:
-        return SFC_COMPARE_PATH_SIZE_CHECKSUM;
-    case 0:
-    default:
+SfcCompareMode FolderCompareWorker::modeFromUiValue(int mode) {
+    // Rust FFI enum values are the source of truth for compare semantics.
+    if (mode < static_cast<int>(SFC_COMPARE_PATH_SIZE) ||
+        mode > static_cast<int>(SFC_COMPARE_PATH_SIZE_CHECKSUM)) {
         return SFC_COMPARE_PATH_SIZE;
     }
+    return static_cast<SfcCompareMode>(mode);
 }

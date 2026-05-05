@@ -313,7 +313,7 @@ qulonglong FolderCompareController::progressTotal() const {
     return m_progressTotal;
 }
 
-void FolderCompareController::handleProgress(int stage, qulonglong current, qulonglong total,
+void FolderCompareController::handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total,
                                              const QString& path) {
     m_progressCurrent = current;
     m_progressTotal = total;
@@ -321,14 +321,13 @@ void FolderCompareController::handleProgress(int stage, qulonglong current, qulo
 
     const QString label = progressLabel(stage, current, total, path);
     setProgressText(label);
-    if (stage == SFC_PROGRESS_FAILED || stage == SFC_PROGRESS_CANCELED ||
-        stage == SFC_PROGRESS_COMPLETE) {
+    if (isTerminalStage(stage)) {
         addLog(label);
     }
 }
 
 void FolderCompareController::handleFinished(SfcReport* report, const QString& errorMessage,
-                                             bool canceled) {
+                                             SfcProgressStage terminalStage) {
     setBusy(false);
     m_progressCurrent = 0;
     m_progressTotal = 0;
@@ -336,7 +335,7 @@ void FolderCompareController::handleFinished(SfcReport* report, const QString& e
     m_worker = nullptr;
     m_thread = nullptr;
 
-    if (canceled) {
+    if (terminalStage == SFC_PROGRESS_CANCELED) {
         if (report) {
             sfc_report_free(report);
         }
@@ -441,7 +440,12 @@ QString FolderCompareController::formatBytes(qulonglong bytes) {
     return QLocale().formattedDataSize(bytes, 1, QLocale::DataSizeTraditionalFormat);
 }
 
-QString FolderCompareController::progressLabel(int stage, qulonglong current, qulonglong total,
+bool FolderCompareController::isTerminalStage(SfcProgressStage stage) {
+    return stage == SFC_PROGRESS_FAILED || stage == SFC_PROGRESS_CANCELED ||
+           stage == SFC_PROGRESS_COMPLETE;
+}
+
+QString FolderCompareController::progressLabel(SfcProgressStage stage, qulonglong current, qulonglong total,
                                                const QString& path) {
     const QString count =
         total > 0 ? QStringLiteral("%1 / %2").arg(current).arg(total) : QString::number(current);

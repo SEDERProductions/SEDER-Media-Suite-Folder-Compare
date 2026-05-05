@@ -24,14 +24,14 @@ class FolderCompareWorker final : public QObject {
     void cancel();
 
   signals:
-    void progress(int stage, qulonglong current, qulonglong total, QString path);
-    void finished(SfcReport* report, QString errorMessage, bool canceled);
+    void progress(SfcProgressStage stage, qulonglong current, qulonglong total, QString path);
+    void finished(SfcReport* report, QString errorMessage, SfcProgressStage terminalStage);
 
   private:
     static void progressCallback(SfcProgressStage stage, uint64_t current, uint64_t total,
                                  const char* path, void* userData);
     static bool cancelCallback(void* userData);
-    static SfcCompareMode modeFromIndex(int mode);
+    static SfcCompareMode modeFromUiValue(int mode);
 
     QString m_folderA;
     QString m_folderB;
@@ -39,4 +39,5 @@ class FolderCompareWorker final : public QObject {
     bool m_ignoreHiddenSystem = true;
     QString m_ignorePatterns;
     std::atomic_bool m_canceled = false;
+    std::atomic<int> m_terminalStage {static_cast<int>(SFC_PROGRESS_COMPLETE)};
 };
