@@ -8,8 +8,8 @@ ApplicationWindow {
     id: window
     width: 1320
     height: 860
-    minimumWidth: 1200
-    minimumHeight: 720
+    minimumWidth: Qt.platform.os === "osx" ? 980 : 960
+    minimumHeight: Qt.platform.os === "osx" ? 620 : 600
     visible: true
     title: "SEDER Folder Compare"
 
@@ -18,6 +18,8 @@ ApplicationWindow {
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
+    readonly property real railWidthRatio: width < 1200 ? 0.34 : 0.3
+    readonly property int leftRailWidth: Math.max(300, Math.min(420, Math.round(width * railWidthRatio)))
 
     QtObject {
         id: colors
@@ -84,7 +86,8 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 368
+            Layout.preferredWidth: window.leftRailWidth
+            Layout.minimumWidth: 280
             visible: true
             color: colors.panel
             border.color: colors.line
@@ -385,12 +388,14 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 148
+                Layout.preferredHeight: Math.max(metricsPanel.implicitHeight + 24, window.height * 0.2)
+                Layout.minimumHeight: metricsPanel.implicitHeight + 24
                 color: colors.bg
                 border.color: colors.line
                 border.width: 1
 
                 ColumnLayout {
+                    id: metricsPanel
                     anchors.fill: parent
                     anchors.margins: 16
                     spacing: 12
@@ -578,12 +583,14 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 80
+                Layout.preferredHeight: Math.max(statusPanel.implicitHeight + 24, window.height * 0.13)
+                Layout.minimumHeight: statusPanel.implicitHeight + 24
                 color: colors.panel
                 border.color: colors.line
                 border.width: 1
 
                 ColumnLayout {
+                    id: statusPanel
                     anchors.fill: parent
                     anchors.margins: 12
                     spacing: 6
