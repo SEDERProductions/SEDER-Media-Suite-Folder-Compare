@@ -148,6 +148,10 @@ void FolderCompareController::setFolderB(const QString& folder) {
 }
 
 void FolderCompareController::setMode(int mode) {
+    if (mode < 0 || mode > 2) {
+        addLog(QStringLiteral("Invalid compare mode ignored: %1").arg(mode));
+        return;
+    }
     assignPropertyIfChanged(m_mode, mode, &FolderCompareController::modeChanged, this);
 }
 
