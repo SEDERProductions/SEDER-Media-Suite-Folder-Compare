@@ -71,12 +71,21 @@ ApplicationWindow {
     color: colors.bg
 
     // Keyboard shortcuts
-    Shortcut { sequence: "Ctrl+O"; onActivated: folderController.chooseFolderA() }
-    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: folderController.chooseFolderB() }
-    Shortcut { sequence: "Ctrl+R"; onActivated: folderController.startComparison() }
-    Shortcut { sequence: "Escape"; onActivated: folderController.cancelComparison() }
-    Shortcut { sequence: "Ctrl+Shift+T"; onActivated: folderController.exportTxt() }
-    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: folderController.exportCsv() }
+    Shortcut { sequence: StandardKey.Open; onActivated: folderController.chooseFolderA() }
+    Shortcut {
+        sequence: Qt.platform.os === "osx" ? "Meta+Shift+O" : "Ctrl+Shift+O"
+        onActivated: folderController.chooseFolderB()
+    }
+    Shortcut { sequence: StandardKey.Refresh; onActivated: folderController.startComparison() }
+    Shortcut { sequence: StandardKey.Cancel; onActivated: folderController.cancelComparison() }
+    Shortcut {
+        sequence: Qt.platform.os === "osx" ? "Meta+Shift+T" : "Ctrl+Shift+T"
+        onActivated: folderController.exportTxt()
+    }
+    Shortcut {
+        sequence: Qt.platform.os === "osx" ? "Meta+Shift+C" : "Ctrl+Shift+C"
+        onActivated: folderController.exportCsv()
+    }
 
     RowLayout {
         anchors.fill: parent
