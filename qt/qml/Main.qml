@@ -637,6 +637,15 @@ ApplicationWindow {
                             elide: Text.ElideMiddle
                             font.pixelSize: 12
                             font.family: window.monoFont
+                            activeFocusOnTab: true
+
+                            ToolTip.visible: (hoverArea.containsMouse || activeFocus) && truncated
+                            ToolTip.text: text
+                            ToolTip.delay: 300
+
+                            HoverHandler {
+                                id: hoverArea
+                            }
                         }
                         Button {
                             text: "Clear"
@@ -658,18 +667,63 @@ ApplicationWindow {
                     }
 
                     ListView {
+                        id: logView
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
                         model: folderController.logEntries
-                        delegate: Text {
+                        spacing: 4
+                        property bool autoScrollToLatest: true
+
+                        onMovementStarted: {
+                            if (!atYEnd) {
+                                autoScrollToLatest = false
+                            }
+                        }
+                        onMovementEnded: {
+                            if (atYEnd) {
+                                autoScrollToLatest = true
+                            }
+                        }
+                        onCountChanged: {
+                            if (autoScrollToLatest && count > 0) {
+                                positionViewAtBeginning()
+                            }
+                        }
+
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AlwaysOn
+                        }
+
+                        delegate: Rectangle {
                             required property string modelData
                             width: ListView.view.width
-                            text: modelData
-                            color: colors.faint
-                            elide: Text.ElideMiddle
-                            font.pixelSize: 12
-                            font.family: window.monoFont
+                            radius: 3
+                            color: modelData.indexOf("[ERROR]") >= 0
+                                   ? (window.isDark ? "#3b2323" : "#f9e8e8")
+                                   : (modelData.indexOf("[WARN]") >= 0
+                                       ? (window.isDark ? "#3a321f" : "#fcf6df")
+                                       : "transparent")
+
+                            implicitHeight: logText.implicitHeight + 6
+
+                            Text {
+                                id: logText
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                text: modelData
+                                color: modelData.indexOf("[ERROR]") >= 0
+                                       ? (window.isDark ? "#ff9e9e" : "#8a1c1c")
+                                       : (modelData.indexOf("[WARN]") >= 0
+                                           ? (window.isDark ? "#ffd88a" : "#7a5a0f")
+                                           : colors.text)
+                                elide: Text.ElideRight
+                                font.pixelSize: 11
+                                font.family: window.monoFont
+                            }
                         }
                     }
                 }
