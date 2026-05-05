@@ -6,8 +6,8 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDir>
-#include <QFileInfo>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QLocale>
 #include <QSettings>
 #include <QStyleHints>
@@ -307,17 +307,20 @@ void FolderCompareController::clearLog() {
 QVariantMap FolderCompareController::parseDroppedFolderUrl(const QString& droppedUrl) const {
     const QUrl url = QUrl::fromUserInput(droppedUrl.trimmed());
     if (!url.isValid() || !url.isLocalFile()) {
-        return {{QStringLiteral("error"), QStringLiteral("Dropped item is not a local folder URL.")}};
+        return {
+            {QStringLiteral("error"), QStringLiteral("Dropped item is not a local folder URL.")}};
     }
 
     const QString localPath = QDir::cleanPath(url.toLocalFile());
     if (localPath.isEmpty()) {
-        return {{QStringLiteral("error"), QStringLiteral("Could not read a local folder path from drop data.")}};
+        return {{QStringLiteral("error"),
+                 QStringLiteral("Could not read a local folder path from drop data.")}};
     }
 
     const QFileInfo info(localPath);
     if (!info.exists() || !info.isDir()) {
-        return {{QStringLiteral("error"), QStringLiteral("Dropped item is not an existing folder path.")}};
+        return {{QStringLiteral("error"),
+                 QStringLiteral("Dropped item is not an existing folder path.")}};
     }
 
     return {{QStringLiteral("path"), QDir::toNativeSeparators(localPath)}};
