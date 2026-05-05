@@ -398,7 +398,7 @@ void FolderCompareController::setProgressText(const QString& progress) {
 }
 
 void FolderCompareController::addLog(const QString& message, LogSeverity severity,
-                                  bool includeTimestamp) {
+                                     bool includeTimestamp) {
     const QString severityLabel = [severity]() {
         switch (severity) {
         case LogSeverity::Warning:
