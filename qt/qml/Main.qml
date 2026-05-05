@@ -70,13 +70,27 @@ ApplicationWindow {
 
     color: colors.bg
 
+    readonly property bool isMac: Qt.platform.os === "osx"
+    readonly property string openFolderBShortcut: isMac ? "Meta+Shift+O" : "Ctrl+Shift+O"
+    readonly property string startShortcut: isMac ? "Meta+R" : "Ctrl+R"
+    readonly property string exportTxtShortcut: isMac ? "Meta+Shift+T" : "Ctrl+Shift+T"
+    readonly property string exportCsvShortcut: isMac ? "Meta+Shift+C" : "Ctrl+Shift+C"
+
+    function hintText(shortcutText) {
+        return isMac ? shortcutText.replace("Meta", "⌘") : shortcutText
+    }
+
     // Keyboard shortcuts
-    Shortcut { sequence: "Ctrl+O"; onActivated: folderController.chooseFolderA() }
-    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: folderController.chooseFolderB() }
-    Shortcut { sequence: "Ctrl+R"; onActivated: folderController.startComparison() }
-    Shortcut { sequence: "Escape"; onActivated: folderController.cancelComparison() }
-    Shortcut { sequence: "Ctrl+Shift+T"; onActivated: folderController.exportTxt() }
-    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: folderController.exportCsv() }
+    Shortcut { sequence: StandardKey.Open; onActivated: folderController.chooseFolderA() }
+    Shortcut { sequence: window.openFolderBShortcut; onActivated: folderController.chooseFolderB() }
+    Shortcut { sequence: StandardKey.Refresh; onActivated: folderController.startComparison() }
+    Shortcut {
+        sequence: StandardKey.Cancel
+        enabled: folderController.busy
+        onActivated: folderController.cancelComparison()
+    }
+    Shortcut { sequence: StandardKey.Save; onActivated: folderController.exportTxt() }
+    Shortcut { sequence: StandardKey.SaveAs; onActivated: folderController.exportCsv() }
 
     RowLayout {
         anchors.fill: parent
@@ -137,6 +151,13 @@ ApplicationWindow {
                         path: folderController.folderB
                         action: function() { folderController.chooseFolderB() }
                         onDroppedFolder: function(folder) { folderController.folderB = folder }
+                    }
+
+                    Label {
+                        text: "Open A: " + window.hintText("Ctrl+O") + "  •  Open B: " + window.hintText(window.openFolderBShortcut)
+                        color: colors.muted
+                        font.pixelSize: 11
+                        font.family: window.monoFont
                     }
 
                     Label {
@@ -310,7 +331,7 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
-                            text: folderController.busy ? "Cancel Comparison" : "Start Comparison"
+                            text: folderController.busy ? "Cancel Comparison (Esc)" : "Start Comparison (" + window.hintText(window.startShortcut) + ")"
                             onClicked: folderController.busy ? folderController.cancelComparison() : folderController.startComparison()
                             background: Rectangle {
                                 radius: 5
@@ -333,7 +354,7 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
-                            text: "Export TXT"
+                            text: "Export TXT (" + window.hintText(window.exportTxtShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
                             background: Rectangle {
@@ -353,7 +374,7 @@ ApplicationWindow {
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Export CSV"
+                            text: "Export CSV (" + window.hintText(window.exportCsvShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
                             background: Rectangle {
