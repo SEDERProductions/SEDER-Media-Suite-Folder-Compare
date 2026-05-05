@@ -313,8 +313,8 @@ qulonglong FolderCompareController::progressTotal() const {
     return m_progressTotal;
 }
 
-void FolderCompareController::handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total,
-                                             const QString& path) {
+void FolderCompareController::handleProgress(SfcProgressStage stage, qulonglong current,
+                                             qulonglong total, const QString& path) {
     m_progressCurrent = current;
     m_progressTotal = total;
     emit progressChanged();
@@ -445,8 +445,8 @@ bool FolderCompareController::isTerminalStage(SfcProgressStage stage) {
            stage == SFC_PROGRESS_COMPLETE;
 }
 
-QString FolderCompareController::progressLabel(SfcProgressStage stage, qulonglong current, qulonglong total,
-                                               const QString& path) {
+QString FolderCompareController::progressLabel(SfcProgressStage stage, qulonglong current,
+                                               qulonglong total, const QString& path) {
     const QString count =
         total > 0 ? QStringLiteral("%1 / %2").arg(current).arg(total) : QString::number(current);
     const QString suffix = path.isEmpty() ? QString() : QStringLiteral(" - %1").arg(path);

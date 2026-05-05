@@ -39,5 +39,5 @@ class FolderCompareWorker final : public QObject {
     bool m_ignoreHiddenSystem = true;
     QString m_ignorePatterns;
     std::atomic_bool m_canceled = false;
-    std::atomic<int> m_terminalStage {static_cast<int>(SFC_PROGRESS_COMPLETE)};
+    std::atomic<int> m_terminalStage{static_cast<int>(SFC_PROGRESS_COMPLETE)};
 };

@@ -102,8 +102,10 @@ class FolderCompareController final : public QObject {
     void progressChanged();
 
   private slots:
-    void handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total, const QString& path);
-    void handleFinished(SfcReport* report, const QString& errorMessage, SfcProgressStage terminalStage);
+    void handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total,
+                        const QString& path);
+    void handleFinished(SfcReport* report, const QString& errorMessage,
+                        SfcProgressStage terminalStage);
 
   private:
     void setBusy(bool busy);

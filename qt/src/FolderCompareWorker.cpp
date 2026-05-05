@@ -50,8 +50,7 @@ void FolderCompareWorker::progressCallback(SfcProgressStage stage, uint64_t curr
         stage == SFC_PROGRESS_COMPLETE) {
         worker->m_terminalStage.store(static_cast<int>(stage), std::memory_order_relaxed);
     }
-    emit worker->progress(stage, static_cast<qulonglong>(current),
-                          static_cast<qulonglong>(total),
+    emit worker->progress(stage, static_cast<qulonglong>(current), static_cast<qulonglong>(total),
                           path ? QString::fromUtf8(path) : QString());
 }
 
