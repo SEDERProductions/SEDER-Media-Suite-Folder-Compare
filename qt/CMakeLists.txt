@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SederFolderCompareQt VERSION 0.1.4 LANGUAGES CXX)
+project(SederFolderCompareQt VERSION 0.1.17 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -83,6 +83,10 @@ qt_add_resources(seder-folder-compare-qt qml_resources
 target_include_directories(seder-folder-compare-qt PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+target_compile_definitions(seder-folder-compare-qt PRIVATE
+    SEDER_APP_VERSION="${PROJECT_VERSION}"
 )
 
 target_link_libraries(seder-folder-compare-qt PRIVATE

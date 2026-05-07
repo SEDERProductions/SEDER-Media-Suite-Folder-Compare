@@ -132,7 +132,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: "v0.1.4"
+                            text: "v" + Qt.application.version
                             color: colors.muted
                             font.pixelSize: 12
                             font.family: window.monoFont
