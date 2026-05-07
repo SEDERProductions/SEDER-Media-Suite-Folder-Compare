@@ -195,7 +195,7 @@ void FolderCompareController::startComparison() {
     }
     if (m_folderA.isEmpty() || m_folderB.isEmpty()) {
         setStatusText(QStringLiteral("Choose Folder A and Folder B before starting."));
-        addLog(QStringLiteral("Start blocked: missing folder selection."));
+        addLog(QStringLiteral("Start blocked: missing folder selection."), LogSeverity::Warning);
         return;
     }
 
@@ -241,7 +241,7 @@ void FolderCompareController::cancelComparison() {
     }
     m_worker->cancel();
     setStatusText(QStringLiteral("Canceling comparison..."));
-    addLog(QStringLiteral("Cancellation requested."));
+    addLog(QStringLiteral("Cancellation requested."), LogSeverity::Warning);
 }
 
 void FolderCompareController::exportTxt() {
@@ -266,7 +266,7 @@ void FolderCompareController::exportTxt() {
         setStatusText(QStringLiteral("TXT export complete."));
     } else {
         const QString message = takeError(error);
-        addLog(QStringLiteral("TXT export failed: %1").arg(message));
+        addLog(QStringLiteral("TXT export failed: %1").arg(message), LogSeverity::Error);
         setStatusText(message);
     }
 }
@@ -292,7 +292,7 @@ void FolderCompareController::exportCsv() {
         setStatusText(QStringLiteral("CSV export complete."));
     } else {
         const QString message = takeError(error);
-        addLog(QStringLiteral("CSV export failed: %1").arg(message));
+        addLog(QStringLiteral("CSV export failed: %1").arg(message), LogSeverity::Error);
         setStatusText(message);
     }
 }
@@ -368,7 +368,7 @@ void FolderCompareController::handleFinished(SfcReport* report, const QString& e
         }
         setStatusText(QStringLiteral("Comparison canceled."));
         setProgressText(QStringLiteral("Canceled"));
-        addLog(QStringLiteral("Comparison canceled."));
+        addLog(QStringLiteral("Comparison canceled."), LogSeverity::Warning);
         return;
     }
 
@@ -380,7 +380,7 @@ void FolderCompareController::handleFinished(SfcReport* report, const QString& e
             errorMessage.isEmpty() ? QStringLiteral("Comparison failed.") : errorMessage;
         setStatusText(message);
         setProgressText(QStringLiteral("Failed"));
-        addLog(QStringLiteral("Comparison failed: %1").arg(message));
+        addLog(QStringLiteral("Comparison failed: %1").arg(message), LogSeverity::Error);
         return;
     }
 
@@ -421,9 +421,27 @@ void FolderCompareController::setProgressText(const QString& progress) {
     emit progressTextChanged();
 }
 
-void FolderCompareController::addLog(const QString& message) {
-    const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
-    m_logEntries.prepend(QStringLiteral("%1  %2").arg(timestamp, message));
+void FolderCompareController::addLog(const QString& message, LogSeverity severity,
+                                     bool includeTimestamp) {
+    const QString severityLabel = [severity]() {
+        switch (severity) {
+        case LogSeverity::Warning:
+            return QStringLiteral("WARN");
+        case LogSeverity::Error:
+            return QStringLiteral("ERROR");
+        case LogSeverity::Info:
+        default:
+            return QStringLiteral("INFO");
+        }
+    }();
+
+    QStringList parts;
+    if (includeTimestamp) {
+        parts.append(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss")));
+    }
+    parts.append(QStringLiteral("[%1]").arg(severityLabel));
+    parts.append(message);
+    m_logEntries.prepend(parts.join(QStringLiteral("  ")));
     while (m_logEntries.size() > 200) {
         m_logEntries.removeLast();
     }
