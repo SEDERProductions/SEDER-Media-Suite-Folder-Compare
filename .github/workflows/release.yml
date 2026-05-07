@@ -29,7 +29,7 @@ jobs:
       release_tag: ${{ steps.bump.outputs.release_tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
@@ -56,6 +56,7 @@ jobs:
 
           version_no_v="${new_tag#v}"
           sed -i "s/^version = \".*\"/version = \"${version_no_v}\"/" Cargo.toml
+          cargo update --package seder-folder-compare --precise "${version_no_v}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -63,7 +64,7 @@ jobs:
           if git diff --quiet; then
             echo "No version changes, skipping commit"
           else
-            git add Cargo.toml
+            git add Cargo.toml Cargo.lock
             git commit -m "chore: bump version to ${new_tag}"
             git tag "$new_tag"
             git pull --rebase origin main || true
@@ -110,7 +111,7 @@ jobs:
           echo "Artifact release tag: $release_tag"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.vars.outputs.release_tag }}
           fetch-depth: 0
@@ -224,7 +225,7 @@ jobs:
           fi
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: |
@@ -239,7 +240,7 @@ jobs:
     if: always() && needs.build.result == 'success' && needs.build.outputs.release_tag != '' && needs.build.outputs.release_tag != 'manual'
     steps:
       - name: Download packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -249,7 +250,7 @@ jobs:
           find dist -name "*.sha256" -print0 | sort -z | xargs -0 cat > SHA256SUMS.txt
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build.outputs.release_tag }}
           draft: false
