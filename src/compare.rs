@@ -157,6 +157,8 @@ impl IgnoreMatcher {
         self.patterns.iter().any(|pattern| {
             if pattern.is_glob {
                 wildcard_match(&pattern.raw, name) || wildcard_match(&pattern.raw, &normalized)
+            } else if pattern.raw.contains('/') {
+                normalized == pattern.raw || normalized.ends_with(&format!("/{}", pattern.raw))
             } else {
                 name == pattern.raw
             }
@@ -396,7 +398,7 @@ pub fn scan_folder_with_progress(
             } else {
                 None
             };
-            result.total_size += metadata.len();
+            result.total_size = result.total_size.saturating_add(metadata.len());
             result.files.insert(
                 rel.clone(),
                 FileEntry {
@@ -502,7 +504,7 @@ pub fn compare_scans_with_progress(
         total_files: total_keys,
         total_folders: a.folders.union(&b.folders).count(),
         // Combined size of both sides (a file present on both sides counts twice)
-        total_size: a.total_size + b.total_size,
+        total_size: a.total_size.saturating_add(b.total_size),
     })
 }
 

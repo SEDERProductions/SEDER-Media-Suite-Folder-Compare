@@ -14,6 +14,9 @@ int main(int argc, char* argv[]) {
     QApplication::setOrganizationName(QStringLiteral("Seder Productions"));
     QApplication::setOrganizationDomain(QStringLiteral("sederproductions.com"));
     QApplication::setApplicationName(QStringLiteral("SEDER Media Suite Folder Compare"));
+#ifdef SEDER_APP_VERSION
+    QApplication::setApplicationVersion(QStringLiteral(SEDER_APP_VERSION));
+#endif
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/assets/icon.svg")));
 
     QQuickStyle::setStyle(QStringLiteral("Fusion"));

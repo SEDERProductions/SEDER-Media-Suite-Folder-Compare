@@ -4,6 +4,7 @@
 #include "FolderCompareUtils.h"
 
 #include <QApplication>
+#include <algorithm>
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
@@ -151,7 +152,9 @@ void FolderCompareController::setFolderB(const QString& folder) {
 }
 
 void FolderCompareController::setMode(int mode) {
-    assignPropertyIfChanged(m_mode, mode, &FolderCompareController::modeChanged, this);
+    const int safeMode = std::clamp(mode, static_cast<int>(SFC_COMPARE_PATH_SIZE),
+                                    static_cast<int>(SFC_COMPARE_PATH_SIZE_CHECKSUM));
+    assignPropertyIfChanged(m_mode, safeMode, &FolderCompareController::modeChanged, this);
 }
 
 void FolderCompareController::setIgnoreHiddenSystem(bool ignore) {
