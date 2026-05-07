@@ -249,7 +249,7 @@ jobs:
           find dist -name "*.sha256" -print0 | sort -z | xargs -0 cat > SHA256SUMS.txt
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build.outputs.release_tag }}
           draft: false
