@@ -16,6 +16,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   tag:
     name: Tag release
@@ -62,6 +66,7 @@ jobs:
             git add Cargo.toml
             git commit -m "chore: bump version to ${new_tag}"
             git tag "$new_tag"
+            git pull --rebase origin main || true
             git push origin HEAD:main
             git push origin "$new_tag"
           fi

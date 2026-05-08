@@ -6,18 +6,22 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: window
-    width: 1320
-    height: 860
-    minimumWidth: 1200
-    minimumHeight: 720
+    width: Math.min(1320, Screen.availableGeometry.width * 0.9)
+    height: Math.min(860, Screen.availableGeometry.height * 0.9)
+    minimumWidth: Qt.platform.os === "osx" ? 980 : 960
+    minimumHeight: Qt.platform.os === "osx" ? 620 : 600
     visible: true
     title: "SEDER Folder Compare"
+    x: (Screen.availableGeometry.width - width) / 2
+    y: (Screen.availableGeometry.height - height) / 2
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
+    readonly property real railWidthRatio: width < 1200 ? 0.34 : 0.3
+    readonly property int leftRailWidth: Math.max(300, Math.min(420, Math.round(width * railWidthRatio)))
 
     QtObject {
         id: colors
@@ -26,8 +30,8 @@ ApplicationWindow {
         readonly property color panelAlt: darkMode ? "#282521" : "#e3dccb"
         readonly property color rail: darkMode ? "#16140f" : "#2a261d"
         readonly property color text: darkMode ? "#ece6d9" : "#16140f"
-        readonly property color muted: darkMode ? "#ada596" : "#4a4438"
-        readonly property color faint: darkMode ? "#716a5f" : "#7a7363"
+        readonly property color muted: darkMode ? "#c4bcad" : "#3f392e"
+        readonly property color faint: darkMode ? "#948b7d" : "#5c5548"
         readonly property color line: darkMode ? "#3b362e" : "#d6cfbe"
         readonly property color accent: "#c63b13"
         readonly property color accentDark: "#8a3a16"
@@ -70,22 +74,27 @@ ApplicationWindow {
 
     color: colors.bg
 
+    readonly property bool isMac: Qt.platform.os === "osx"
+    readonly property string openFolderBShortcut: isMac ? "Meta+Shift+O" : "Ctrl+Shift+O"
+    readonly property string startShortcut: isMac ? "Meta+R" : "Ctrl+R"
+    readonly property string exportTxtShortcut: isMac ? "Meta+Shift+T" : "Ctrl+Shift+T"
+    readonly property string exportCsvShortcut: isMac ? "Meta+Shift+C" : "Ctrl+Shift+C"
+
+    function hintText(shortcutText) {
+        return isMac ? shortcutText.replace("Meta", "⌘") : shortcutText
+    }
+
     // Keyboard shortcuts
     Shortcut { sequence: StandardKey.Open; onActivated: folderController.chooseFolderA() }
-    Shortcut {
-        sequence: Qt.platform.os === "osx" ? "Meta+Shift+O" : "Ctrl+Shift+O"
-        onActivated: folderController.chooseFolderB()
-    }
+    Shortcut { sequence: window.openFolderBShortcut; onActivated: folderController.chooseFolderB() }
     Shortcut { sequence: StandardKey.Refresh; onActivated: folderController.startComparison() }
-    Shortcut { sequence: StandardKey.Cancel; onActivated: folderController.cancelComparison() }
     Shortcut {
-        sequence: Qt.platform.os === "osx" ? "Meta+Shift+T" : "Ctrl+Shift+T"
-        onActivated: folderController.exportTxt()
+        sequence: StandardKey.Cancel
+        enabled: folderController.busy
+        onActivated: folderController.cancelComparison()
     }
-    Shortcut {
-        sequence: Qt.platform.os === "osx" ? "Meta+Shift+C" : "Ctrl+Shift+C"
-        onActivated: folderController.exportCsv()
-    }
+    Shortcut { sequence: StandardKey.Save; onActivated: folderController.exportTxt() }
+    Shortcut { sequence: StandardKey.SaveAs; onActivated: folderController.exportCsv() }
 
     RowLayout {
         anchors.fill: parent
@@ -93,7 +102,8 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 368
+            Layout.preferredWidth: window.leftRailWidth
+            Layout.minimumWidth: 280
             visible: true
             color: colors.panel
             border.color: colors.line
@@ -104,6 +114,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 anchors.margins: 16
                 clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 ColumnLayout {
                     width: parent.width
@@ -123,7 +134,7 @@ ApplicationWindow {
                         Label {
                             text: "v0.1.4"
                             color: colors.muted
-                            font.pixelSize: 10
+                            font.pixelSize: 12
                             font.family: window.monoFont
                         }
                     }
@@ -131,7 +142,7 @@ ApplicationWindow {
                     Label {
                         text: "01 / FOLDERS"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -149,9 +160,16 @@ ApplicationWindow {
                     }
 
                     Label {
+                        text: "Open A: " + window.hintText("Ctrl+O") + "  •  Open B: " + window.hintText(window.openFolderBShortcut)
+                        color: colors.muted
+                        font.pixelSize: 11
+                        font.family: window.monoFont
+                    }
+
+                    Label {
                         text: "02 / COMPARE MODE"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -218,7 +236,7 @@ ApplicationWindow {
                     Label {
                         text: "03 / IGNORE"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -280,7 +298,7 @@ ApplicationWindow {
                     Label {
                         text: "04 / THEME"
                         color: colors.muted
-                        font.pixelSize: 10
+                        font.pixelSize: 12
                         font.family: window.monoFont
                     }
 
@@ -319,7 +337,7 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
-                            text: folderController.busy ? "Cancel Comparison" : "Start Comparison"
+                            text: folderController.busy ? "Cancel Comparison (Esc)" : "Start Comparison (" + window.hintText(window.startShortcut) + ")"
                             onClicked: folderController.busy ? folderController.cancelComparison() : folderController.startComparison()
                             background: Rectangle {
                                 radius: 5
@@ -342,7 +360,7 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
-                            text: "Export TXT"
+                            text: "Export TXT (" + window.hintText(window.exportTxtShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
                             background: Rectangle {
@@ -362,7 +380,7 @@ ApplicationWindow {
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Export CSV"
+                            text: "Export CSV (" + window.hintText(window.exportCsvShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
                             background: Rectangle {
@@ -394,12 +412,14 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 148
+                Layout.preferredHeight: Math.max(metricsPanel.implicitHeight + 24, window.height * 0.2)
+                Layout.minimumHeight: metricsPanel.implicitHeight + 24
                 color: colors.bg
                 border.color: colors.line
                 border.width: 1
 
                 ColumnLayout {
+                    id: metricsPanel
                     anchors.fill: parent
                     anchors.margins: 16
                     spacing: 12
@@ -460,7 +480,7 @@ ApplicationWindow {
                                     color: parent.enabled ? (parent.checked ? "#fff7ee" : colors.text) : colors.faint
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 11
+                                    font.pixelSize: 12
                                 }
                                 ToolTip.visible: hovered && !enabled
                                 ToolTip.text: "No results for this filter"
@@ -501,7 +521,7 @@ ApplicationWindow {
                                     text: modelData
                                     color: colors.muted
                                     verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                     font.family: window.monoFont
                                 }
                             }
@@ -530,11 +550,18 @@ ApplicationWindow {
                                 required property int column
                                 required property string display
                                 required property int statusCode
+                                readonly property bool hovered: mouseArea.containsMouse
+                                readonly property color baseColor: row % 2 === 0 ? colors.panel : colors.panelAlt
+                                readonly property color hoverColor: darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
                                 implicitWidth: tableView.columnWidthProvider(column)
                                 implicitHeight: 34
-                                color: row % 2 === 0 ? colors.panel : colors.panelAlt
+                                color: hovered ? hoverColor : baseColor
                                 border.color: colors.line
                                 border.width: 1
+
+                                Behavior on color {
+                                    ColorAnimation { duration: 90 }
+                                }
 
                                 Text {
                                     anchors.fill: parent
@@ -556,8 +583,6 @@ ApplicationWindow {
                                     id: mouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onEntered: parent.color = Qt.lighter(parent.color, 1.15)
-                                    onExited: parent.color = row % 2 === 0 ? colors.panel : colors.panelAlt
                                 }
                             }
 
@@ -587,12 +612,14 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 80
+                Layout.preferredHeight: Math.max(statusPanel.implicitHeight + 24, window.height * 0.13)
+                Layout.minimumHeight: statusPanel.implicitHeight + 24
                 color: colors.panel
                 border.color: colors.line
                 border.width: 1
 
                 ColumnLayout {
+                    id: statusPanel
                     anchors.fill: parent
                     anchors.margins: 12
                     spacing: 6
@@ -603,7 +630,7 @@ ApplicationWindow {
                         Label {
                             text: "STATUS"
                             color: colors.muted
-                            font.pixelSize: 10
+                            font.pixelSize: 12
                             font.family: window.monoFont
                         }
                         Label {
@@ -628,7 +655,7 @@ ApplicationWindow {
                                 color: colors.muted
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 11
+                                font.pixelSize: 12
                             }
                         }
                     }
@@ -644,13 +671,13 @@ ApplicationWindow {
                             text: modelData
                             color: colors.faint
                             elide: Text.ElideMiddle
-                            font.pixelSize: 11
+                            font.pixelSize: 12
                             font.family: window.monoFont
                         }
                     }
                 }
-            }
         }
+    }
     }
 
     component FolderPicker: ColumnLayout {
@@ -658,6 +685,7 @@ ApplicationWindow {
         property string path
         property var action
         property var onDroppedFolder
+        property string validationError: ""
 
         Layout.fillWidth: true
         spacing: 6
@@ -701,7 +729,7 @@ ApplicationWindow {
                     color: path.length > 0 ? colors.text : colors.faint
                     elide: Text.ElideMiddle
                     font.family: window.monoFont
-                    font.pixelSize: 11
+                    font.pixelSize: 12
                     verticalAlignment: Text.AlignVCenter
 
                     ToolTip.visible: truncated && hoverArea.containsMouse
@@ -720,21 +748,36 @@ ApplicationWindow {
                     anchors.fill: parent
                     enabled: !folderController.busy
                     onDropped: function(drop) {
-                        if (drop.hasUrls) {
-                            for (var i = 0; i < drop.urls.length; i++) {
-                                var url = drop.urls[i]
-                                if (url.startsWith("file:///")) {
-                                    var localPath = url.substring(8)
-                                    if (Qt.platform.os === "windows" && localPath.startsWith("/")) {
-                                        localPath = localPath.substring(1)
-                                    }
-                                    onDroppedFolder(localPath)
-                                    break
-                                }
+                        validationError = ""
+                        if (!drop.hasUrls || drop.urls.length === 0) {
+                            validationError = "Drop a folder from your file manager."
+                            return
+                        }
+
+                        var accepted = false
+                        for (var i = 0; i < drop.urls.length; i++) {
+                            var result = folderController.parseDroppedFolderUrl(drop.urls[i].toString())
+                            if (result.path) {
+                                onDroppedFolder(result.path)
+                                accepted = true
+                                break
                             }
+                        }
+
+                        if (!accepted) {
+                            validationError = "Dropped item is not a valid folder path."
                         }
                     }
                 }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: validationError.length > 0
+                text: validationError
+                color: colors.bad
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
             }
         }
     }
@@ -758,7 +801,7 @@ ApplicationWindow {
             Label {
                 text: label.toUpperCase()
                 color: colors.muted
-                font.pixelSize: 9
+                font.pixelSize: 12
                 font.family: window.monoFont
             }
             Label {
