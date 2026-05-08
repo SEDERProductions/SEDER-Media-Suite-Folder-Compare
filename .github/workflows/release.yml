@@ -56,6 +56,7 @@ jobs:
 
           version_no_v="${new_tag#v}"
           sed -i "s/^version = \".*\"/version = \"${version_no_v}\"/" Cargo.toml
+          cargo update --package seder-folder-compare --precise "${version_no_v}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -63,7 +64,7 @@ jobs:
           if git diff --quiet; then
             echo "No version changes, skipping commit"
           else
-            git add Cargo.toml
+            git add Cargo.toml Cargo.lock
             git commit -m "chore: bump version to ${new_tag}"
             git tag "$new_tag"
             git pull --rebase origin main || true
