@@ -287,6 +287,38 @@ fn ignore_glob_matches_pattern() {
 }
 
 #[test]
+fn ignore_exact_relative_path_without_substring_matching() {
+    let dir = tempdir().unwrap();
+    write(&dir.path().join("cache/render.tmp"), "tmp");
+    write(&dir.path().join("other/render.tmp"), "keep");
+    let scan = scan_folder(
+        dir.path(),
+        &ScanOptions {
+            ignore_hidden_system: false,
+            ignore_patterns: vec!["cache/render.tmp".into()],
+            checksum: false,
+        },
+    )
+    .unwrap();
+    assert!(!scan.files.contains_key("cache/render.tmp"));
+    assert!(scan.files.contains_key("other/render.tmp"));
+}
+
+#[test]
+fn report_total_size_saturates_on_overflow() {
+    let left = ScanResult {
+        total_size: u64::MAX,
+        ..Default::default()
+    };
+    let right = ScanResult {
+        total_size: 1,
+        ..Default::default()
+    };
+    let report = compare_scans(&left, &right, CompareMode::PathSize);
+    assert_eq!(report.total_size, u64::MAX);
+}
+
+#[test]
 fn progress_events_for_100_files_are_dense() {
     let dir = tempdir().unwrap();
     for i in 0..100 {
