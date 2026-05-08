@@ -9,14 +9,16 @@
 #include <QQuickStyle>
 #include <QUrl>
 
+#ifndef APP_VERSION
+#define APP_VERSION "0.1.4"
+#endif
+
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("Seder Productions"));
     QApplication::setOrganizationDomain(QStringLiteral("sederproductions.com"));
     QApplication::setApplicationName(QStringLiteral("SEDER Media Suite Folder Compare"));
-#ifdef SEDER_APP_VERSION
-    QApplication::setApplicationVersion(QStringLiteral(SEDER_APP_VERSION));
-#endif
+    QApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/assets/icon.svg")));
 
     QQuickStyle::setStyle(QStringLiteral("Fusion"));

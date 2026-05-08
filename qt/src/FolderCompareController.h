@@ -110,10 +110,13 @@ class FolderCompareController final : public QObject {
                         SfcProgressStage terminalStage);
 
   private:
+    enum class LogSeverity { Info, Warning, Error };
+
     void setBusy(bool busy);
     void setStatusText(const QString& status);
     void setProgressText(const QString& progress);
-    void addLog(const QString& message);
+    void addLog(const QString& message, LogSeverity severity = LogSeverity::Info,
+                bool includeTimestamp = true);
     void resetSummary();
     void loadSummary(const SfcReport* report);
     QString pickFolder(const QString& title, const QString& current);
