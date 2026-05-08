@@ -3,8 +3,8 @@
 #include "FolderCompareController.h"
 #include "FolderCompareUtils.h"
 
-#include <QApplication>
 #include <algorithm>
+#include <QApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
