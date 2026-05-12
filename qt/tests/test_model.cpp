@@ -19,8 +19,6 @@ class CompareModelTests final : public QObject {
                                   QStringLiteral("4 B"),
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::Matching,
                                   false});
         rows.push_back(CompareRow{QStringLiteral("A001/audio.wav"),
@@ -29,8 +27,6 @@ class CompareModelTests final : public QObject {
                                   QStringLiteral("12 B"),
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::Changed,
                                   false});
         model.setRows(rows);
@@ -52,8 +48,6 @@ class CompareModelTests final : public QObject {
                                   {},
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::Matching,
                                   false});
         rows.push_back(CompareRow{QStringLiteral("changed.mov"),
@@ -62,8 +56,6 @@ class CompareModelTests final : public QObject {
                                   {},
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::Changed,
                                   false});
         rows.push_back(CompareRow{QStringLiteral("only-a.mov"),
@@ -72,8 +64,6 @@ class CompareModelTests final : public QObject {
                                   {},
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::OnlyInA,
                                   false});
         rows.push_back(CompareRow{QStringLiteral("only-b.mov"),
@@ -82,8 +72,6 @@ class CompareModelTests final : public QObject {
                                   {},
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::OnlyInB,
                                   false});
         rows.push_back(CompareRow{QStringLiteral("folder"),
@@ -92,8 +80,6 @@ class CompareModelTests final : public QObject {
                                   {},
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::FolderOnlyInA,
                                   true});
         model.setRows(rows);
@@ -139,8 +125,6 @@ class CompareModelTests final : public QObject {
                                   {},
                                   {},
                                   {},
-                                  QString{},
-                                  QString{},
                                   CompareRow::Matching,
                                   false}});
         QCOMPARE(spy.count(), 1);

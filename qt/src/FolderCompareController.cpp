@@ -53,11 +53,13 @@ FolderCompareController::FolderCompareController(QObject* parent)
             .toString();
     m_ignoreHiddenSystem = settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool();
     m_filterModel.setSourceModel(&m_tableModel);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
         if (m_theme == QStringLiteral("system")) {
             emit effectiveDarkChanged();
         }
     });
+#endif
     resetSummary();
     addLog(QStringLiteral("Folder Compare ready."));
 }
@@ -122,7 +124,11 @@ bool FolderCompareController::effectiveDark() const {
     if (m_theme == QStringLiteral("light")) {
         return false;
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     return qApp->styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#else
+    return false;
+#endif
 }
 QStringList FolderCompareController::logEntries() const {
     return m_logEntries;

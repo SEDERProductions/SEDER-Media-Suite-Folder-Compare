@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Test)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Test)
 
 set(RUST_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/../Cargo.toml")
 set(RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-target")
@@ -133,6 +133,7 @@ target_include_directories(compare-model-tests PRIVATE
 target_link_libraries(compare-model-tests PRIVATE
     Qt6::Core
     Qt6::Test
+    seder_folder_compare_core
 )
 
 if(WIN32)
