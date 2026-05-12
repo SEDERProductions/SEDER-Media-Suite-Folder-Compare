@@ -84,9 +84,7 @@ jobs:
       - name: Check clang-format
         if: runner.os == 'Linux'
         run: |
-          find qt/src qt/tests -name '*.cpp' -o -name '*.h' | xargs clang-format -i
-          git diff
-          git diff --quiet || (echo "clang-format violations found" && exit 1)
+          find qt/src qt/tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
 
       - name: Test
         run: ctest --test-dir build/qt --build-config Release --output-on-failure
