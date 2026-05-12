@@ -1,5 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="SEDER Media Suite Folder Compare icon">
-  <rect x="10" y="10" width="76" height="76" rx="10" fill="#fbfaf7" stroke="#171717" stroke-width="2"/>
-  <rect x="60" y="60" width="18" height="18" rx="3" fill="#313944"/>
-  <path d="M25 31h19l5 7h16v15H25zM31 62h34M31 72h24M67 61l6 6-6 6" fill="none" stroke="#171717" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 96 96" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;">
+    <g transform="matrix(1.210526,0,0,1.210526,-10.105263,-10.105263)">
+        <path d="M86,18.261L86,77.739C86,82.298 82.298,86 77.739,86L18.261,86C13.702,86 10,82.298 10,77.739L10,18.261C10,13.702 13.702,10 18.261,10L77.739,10C82.298,10 86,13.702 86,18.261Z" style="fill:rgb(251,250,247);stroke:rgb(23,23,23);stroke-width:2px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,11,14)">
+        <path d="M78,60L78,72C78,73.656 76.656,75 75,75L63,75C61.344,75 60,73.656 60,72L60,60C60,58.344 61.344,57 63,57L75,57C76.656,57 78,58.344 78,60Z" style="fill:rgb(49,57,68);"/>
+    </g>
+    <g transform="matrix(1.6,0,0,1.625,-24,-29.089689)">
+        <path d="M25,28L44,28L49,35L65,35L65,52L25,52L25,28ZM25,58L65,58M25,68L56.727,68" style="fill:none;fill-rule:nonzero;stroke:rgb(23,23,23);stroke-width:3px;stroke-linecap:round;stroke-linejoin:round;"/>
+    </g>
 </svg>

@@ -23,8 +23,6 @@ struct CompareRow {
     QString sizeB;
     QString checksumA;
     QString checksumB;
-    QString xxh64A;
-    QString xxh64B;
     int status = Changed;
     bool folder = false;
 };
@@ -42,8 +40,6 @@ class CompareResultTableModel final : public QAbstractTableModel {
         SizeBRole,
         ChecksumARole,
         ChecksumBRole,
-        Xxh64ARole,
-        Xxh64BRole,
         IsFolderRole
     };
 
@@ -58,10 +54,13 @@ class CompareResultTableModel final : public QAbstractTableModel {
     int totalRows() const;
     int statusForSourceRow(int row) const;
     bool isFolderRow(int row) const;
+    QString relativePathForRow(int row) const;
 
     void clear();
     void loadFromReport(const SfcReport* report);
     void setRows(QVector<CompareRow> rows);
+    void updateRowStatus(int row, CompareRow::Status newStatus);
+    void removeRow(int row);
 
   signals:
     void rowsChanged();

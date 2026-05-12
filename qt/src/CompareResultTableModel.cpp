@@ -82,10 +82,6 @@ QVariant CompareResultTableModel::data(const QModelIndex& index, int role) const
         return row.checksumA;
     case ChecksumBRole:
         return row.checksumB;
-    case Xxh64ARole:
-        return row.xxh64A;
-    case Xxh64BRole:
-        return row.xxh64B;
     case IsFolderRole:
         return row.folder;
     default:
@@ -126,8 +122,6 @@ QHash<int, QByteArray> CompareResultTableModel::roleNames() const {
         {SizeBRole, "sizeB"},
         {ChecksumARole, "checksumA"},
         {ChecksumBRole, "checksumB"},
-        {Xxh64ARole, "xxh64A"},
-        {Xxh64BRole, "xxh64B"},
         {IsFolderRole, "isFolder"},
     };
 }
@@ -150,6 +144,33 @@ bool CompareResultTableModel::isFolderRow(int row) const {
     return m_rows.at(row).folder;
 }
 
+QString CompareResultTableModel::relativePathForRow(int row) const {
+    if (row < 0 || row >= m_rows.size()) {
+        return {};
+    }
+    return m_rows.at(row).relativePath;
+}
+
+void CompareResultTableModel::updateRowStatus(int row, CompareRow::Status newStatus) {
+    if (row < 0 || row >= m_rows.size()) {
+        return;
+    }
+    m_rows[row].status = newStatus;
+    m_rows[row].statusLabel = statusLabel(newStatus);
+    const QModelIndex idx = index(row, 0);
+    emit dataChanged(idx, index(row, columnCount() - 1));
+}
+
+void CompareResultTableModel::removeRow(int row) {
+    if (row < 0 || row >= m_rows.size()) {
+        return;
+    }
+    beginRemoveRows(QModelIndex(), row, row);
+    m_rows.removeAt(row);
+    endRemoveRows();
+    emit rowsChanged();
+}
+
 void CompareResultTableModel::clear() {
     beginResetModel();
     m_rows.clear();
@@ -164,24 +185,16 @@ void CompareResultTableModel::loadFromReport(const SfcReport* report) {
         rows.reserve(fileRows + static_cast<qsizetype>(sfc_report_folder_diff_count(report)));
 
         for (qsizetype index = 0; index < fileRows; ++index) {
-            const auto status =
-                fromStatus(sfc_report_row_status(report, static_cast<size_t>(index)));
+            const auto rowData =
+                sfc_report_row_get(report, static_cast<size_t>(index));
             CompareRow row;
-            row.relativePath = fromCString(sfc_report_row_path(report, static_cast<size_t>(index)));
-            row.status = status;
-            row.statusLabel = statusLabel(status);
-            row.sizeA =
-                formatBytes(sfc_report_row_size_a_present(report, static_cast<size_t>(index)),
-                            sfc_report_row_size_a(report, static_cast<size_t>(index)));
-            row.sizeB =
-                formatBytes(sfc_report_row_size_b_present(report, static_cast<size_t>(index)),
-                            sfc_report_row_size_b(report, static_cast<size_t>(index)));
-            row.checksumA =
-                fromCString(sfc_report_row_checksum_a(report, static_cast<size_t>(index)));
-            row.checksumB =
-                fromCString(sfc_report_row_checksum_b(report, static_cast<size_t>(index)));
-            row.xxh64A = fromCString(sfc_report_row_xxh64_a(report, static_cast<size_t>(index)));
-            row.xxh64B = fromCString(sfc_report_row_xxh64_b(report, static_cast<size_t>(index)));
+            row.relativePath = fromCString(rowData.relative_path);
+            row.status = fromStatus(rowData.status);
+            row.statusLabel = statusLabel(row.status);
+            row.sizeA = formatBytes(rowData.size_a_present, rowData.size_a);
+            row.sizeB = formatBytes(rowData.size_b_present, rowData.size_b);
+            row.checksumA = fromCString(rowData.checksum_a);
+            row.checksumB = fromCString(rowData.checksum_b);
             rows.push_back(row);
         }
 

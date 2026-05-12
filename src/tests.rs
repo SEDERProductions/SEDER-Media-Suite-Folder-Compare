@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::*;
+use filetime::FileTime;
 use std::cell::Cell;
 use std::fs;
 use std::path::Path;
@@ -131,15 +132,24 @@ fn checksum_comparison_detects_same_size_changes() {
     .unwrap();
     assert_eq!(report.rows[0].status, FileStatus::Changed);
     assert!(report.rows[0].checksum_a.is_some());
-    assert!(report.rows[0].xxh64_a.is_some());
 }
 
 #[test]
 fn modified_time_comparison_detects_difference() {
     let a = tempdir().unwrap();
     let b = tempdir().unwrap();
-    write(&a.path().join("clip.mov"), "abcd");
-    write(&b.path().join("clip.mov"), "abcd");
+    write(&a.path().join("same.mov"), "abcd");
+    write(&b.path().join("same.mov"), "abcd");
+    let base_time = FileTime::from_unix_time(1700000000, 0); // 2023-11-14
+    filetime::set_file_times(a.path().join("same.mov"), base_time, base_time).unwrap();
+    filetime::set_file_times(b.path().join("same.mov"), base_time, base_time).unwrap();
+
+    write(&a.path().join("changed.mov"), "wxyz");
+    write(&b.path().join("changed.mov"), "wxyz");
+    filetime::set_file_times(a.path().join("changed.mov"), base_time, base_time).unwrap();
+    let later_time = FileTime::from_unix_time(1700003600, 0); // 1 hour later
+    filetime::set_file_times(b.path().join("changed.mov"), later_time, later_time).unwrap();
+
     let report = compare_folders(
         a.path(),
         b.path(),
@@ -148,11 +158,13 @@ fn modified_time_comparison_detects_difference() {
         vec![],
     )
     .unwrap();
-    assert_eq!(report.rows.len(), 1);
-    let row = &report.rows[0];
-    // Same content on different tempdirs may have different timestamps.
-    // The status should be either Matching or Changed depending on fs resolution.
-    assert!(row.status == FileStatus::Matching || row.status == FileStatus::Changed);
+    assert_eq!(report.rows.len(), 2);
+
+    let same = report.rows.iter().find(|r| r.relative_path == "same.mov").unwrap();
+    assert_eq!(same.status, FileStatus::Matching);
+
+    let changed = report.rows.iter().find(|r| r.relative_path == "changed.mov").unwrap();
+    assert_eq!(changed.status, FileStatus::Changed);
 }
 
 #[test]
@@ -344,9 +356,9 @@ fn progress_events_for_100_files_are_dense() {
         &mut callbacks,
     )
     .unwrap();
-    // Pre-fix: 10 events. Post-fix with multiple_of(50) fallback for total=0:
-    // ≥5 + every 50th = current<=5 emits 5; then 50, 100. Plus initial root
-    // emit. Should be at least 8 events.
+    // With multiple_of(10) fallback for total=0:
+    // ≥5 + every 10th = current<=5 emits 5; then 10,20,...,100.
+    // Plus initial root emit. Should be well above 8 events.
     assert!(
         events >= 8,
         "expected dense progress events for 100 files, got {events}"

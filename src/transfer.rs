@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+use crate::compare::{ProgressCallbacks, ProgressEvent, ProgressStage};
+use anyhow::{Context, Result};
+use std::fs;
+use std::io::{Read, Write};
+use std::path::Path;
+use std::time::UNIX_EPOCH;
+use walkdir::WalkDir;
+
+#[derive(Debug, Clone)]
+pub struct FileMetadata {
+    pub size: u64,
+    pub modified: Option<u64>,
+}
+
+pub fn get_file_metadata(path: &Path) -> Result<FileMetadata> {
+    let metadata = fs::metadata(path)?;
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs());
+    Ok(FileMetadata {
+        size: metadata.len(),
+        modified,
+    })
+}
+
+pub fn copy_file(
+    source: &Path,
+    dest: &Path,
+    callbacks: &mut ProgressCallbacks<'_>,
+) -> Result<()> {
+    callbacks.check_canceled()?;
+
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+    }
+
+    let total = fs::metadata(source)
+        .with_context(|| format!("Failed to stat source {}", source.display()))?
+        .len();
+    let mut source_file = fs::File::open(source)
+        .with_context(|| format!("Failed to open source {}", source.display()))?;
+    let mut dest_file = fs::File::create(dest)
+        .with_context(|| format!("Failed to create destination {}", dest.display()))?;
+
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut transferred = 0_u64;
+
+    loop {
+        if let Err(e) = callbacks.check_canceled() {
+            let _ = fs::remove_file(dest);
+            return Err(e);
+        }
+        let read = source_file
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to read source {}", source.display()))?;
+        if read == 0 {
+            break;
+        }
+        dest_file
+            .write_all(&buffer[..read])
+            .with_context(|| format!("Failed to write destination {}", dest.display()))?;
+        transferred = transferred.saturating_add(read as u64);
+        callbacks.emit(ProgressEvent {
+            stage: ProgressStage::Transferring,
+            current: transferred,
+            total,
+            path: Some(
+                dest.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+            ),
+        });
+    }
+
+    dest_file.flush()?;
+    Ok(())
+}
+
+pub fn copy_folder(
+    source: &Path,
+    dest: &Path,
+    callbacks: &mut ProgressCallbacks<'_>,
+) -> Result<()> {
+    callbacks.check_canceled()?;
+
+    if !source.is_dir() {
+        anyhow::bail!("Source is not a directory: {}", source.display());
+    }
+
+    let entries: Vec<_> = WalkDir::new(source)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.depth() > 0)
+        .collect();
+
+    let total = entries.len() as u64;
+
+    for (index, entry) in entries.iter().enumerate() {
+        callbacks.check_canceled()?;
+
+        let rel = entry
+            .path()
+            .strip_prefix(source)
+            .with_context(|| format!("Failed to compute relative path from {}", source.display()))?;
+        let dest_path = dest.join(rel);
+        let current = index as u64 + 1;
+
+        callbacks.emit(ProgressEvent {
+            stage: ProgressStage::Transferring,
+            current,
+            total,
+            path: Some(rel.to_string_lossy().to_string()),
+        });
+
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&dest_path).with_context(|| {
+                format!("Failed to create directory {}", dest_path.display())
+            })?;
+        } else if entry.file_type().is_file() || entry.file_type().is_symlink() {
+            if let Some(parent) = dest_path.parent() {
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create directory {}", parent.display())
+                })?;
+            }
+            fs::copy(entry.path(), &dest_path).with_context(|| {
+                format!(
+                    "Failed to copy {} to {}",
+                    entry.path().display(),
+                    dest_path.display()
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn remove_file(path: &Path) -> Result<()> {
+    fs::remove_file(path).with_context(|| format!("Failed to remove file {}", path.display()))
+}
+
+pub fn remove_folder(path: &Path) -> Result<()> {
+    fs::remove_dir_all(path)
+        .with_context(|| format!("Failed to remove directory {}", path.display()))
+}
+
+pub fn verify_file(path: &Path, expected_size: u64) -> Result<bool> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.len() == expected_size),
+        Err(_) => Ok(false),
+    }
+}

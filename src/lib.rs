@@ -3,6 +3,7 @@
 mod compare;
 mod ffi;
 mod report;
+mod transfer;
 
 pub use compare::{
     checksum_file, checksum_file_set, compare_folders, compare_folders_with_progress,

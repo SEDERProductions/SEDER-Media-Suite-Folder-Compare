@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::compare::{
     compare_folders_with_progress, CompareMode, CompareReport, FileStatus, ProgressCallbacks,
     ProgressEvent, ProgressStage, CANCELED_MESSAGE,
 };
 use crate::report::{compare_summary, report_csv, report_txt, write_text};
+use crate::transfer; // ── ADDED ───────────────────────────────────────────
 use anyhow::Result;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
@@ -35,9 +37,10 @@ pub enum SfcProgressStage {
     ScanningB = 1,
     Checksumming = 2,
     Comparing = 3,
-    Complete = 4,
-    Canceled = 5,
-    Failed = 6,
+    Transferring = 4,
+    Complete = 5,
+    Canceled = 6,
+    Failed = 7,
 }
 
 pub type SfcProgressCallback = Option<
@@ -64,6 +67,18 @@ pub struct SfcCompareRequest {
     pub user_data: *mut c_void,
 }
 
+#[repr(C)]
+pub struct SfcReportRowData {
+    pub relative_path: *const c_char,
+    pub status: SfcFileStatus,
+    pub size_a_present: bool,
+    pub size_b_present: bool,
+    pub size_a: u64,
+    pub size_b: u64,
+    pub checksum_a: *const c_char,
+    pub checksum_b: *const c_char,
+}
+
 struct FfiRow {
     relative_path: CString,
     status: SfcFileStatus,
@@ -71,8 +86,6 @@ struct FfiRow {
     size_b: Option<u64>,
     checksum_a: Option<CString>,
     checksum_b: Option<CString>,
-    xxh64_a: Option<CString>,
-    xxh64_b: Option<CString>,
 }
 
 pub struct FfiReport {
@@ -106,6 +119,7 @@ fn progress_stage_to_ffi(stage: ProgressStage) -> SfcProgressStage {
         ProgressStage::ScanningB => SfcProgressStage::ScanningB,
         ProgressStage::Checksumming => SfcProgressStage::Checksumming,
         ProgressStage::Comparing => SfcProgressStage::Comparing,
+        ProgressStage::Transferring => SfcProgressStage::Transferring,
         ProgressStage::Complete => SfcProgressStage::Complete,
         ProgressStage::Canceled => SfcProgressStage::Canceled,
         ProgressStage::Failed => SfcProgressStage::Failed,
@@ -139,6 +153,8 @@ unsafe fn optional_cstr_to_string(value: *const c_char) -> String {
     }
 }
 
+/// SAFETY: `error_out` must be either null or a valid pointer to a `*mut c_char`
+/// that can be written to (e.g. a stack-local or heap-allocated `*mut c_char`).
 unsafe fn set_error(error_out: *mut *mut c_char, message: impl AsRef<str>) {
     if !error_out.is_null() {
         unsafe {
@@ -174,8 +190,6 @@ fn ffi_report(report: CompareReport) -> *mut FfiReport {
             size_b: row.size_b,
             checksum_a: row.checksum_a.as_deref().map(sanitized_cstring),
             checksum_b: row.checksum_b.as_deref().map(sanitized_cstring),
-            xxh64_a: row.xxh64_a.as_deref().map(sanitized_cstring),
-            xxh64_b: row.xxh64_b.as_deref().map(sanitized_cstring),
         })
         .collect();
     let folders_only_in_a = report
@@ -361,7 +375,7 @@ pub unsafe extern "C" fn sfc_report_row_status(
     unsafe { report_ref(report) }
         .and_then(|report| report.rows.get(index))
         .map(|row| row.status)
-        .unwrap_or(SfcFileStatus::Changed)
+        .unwrap_or(SfcFileStatus::Matching)
 }
 
 #[no_mangle]
@@ -427,27 +441,44 @@ pub unsafe extern "C" fn sfc_report_row_checksum_b(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sfc_report_row_xxh64_a(
+pub unsafe extern "C" fn sfc_report_row_get(
     report: *const FfiReport,
     index: usize,
-) -> *const c_char {
-    unsafe { report_ref(report) }
-        .and_then(|report| report.rows.get(index))
-        .and_then(|row| row.xxh64_a.as_ref())
-        .map(|value| value.as_ptr())
-        .unwrap_or(ptr::null())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sfc_report_row_xxh64_b(
-    report: *const FfiReport,
-    index: usize,
-) -> *const c_char {
-    unsafe { report_ref(report) }
-        .and_then(|report| report.rows.get(index))
-        .and_then(|row| row.xxh64_b.as_ref())
-        .map(|value| value.as_ptr())
-        .unwrap_or(ptr::null())
+) -> SfcReportRowData {
+    let Some(report) = (unsafe { report_ref(report) }) else {
+        return SfcReportRowData {
+            relative_path: ptr::null(),
+            status: SfcFileStatus::Changed,
+            size_a_present: false,
+            size_b_present: false,
+            size_a: 0,
+            size_b: 0,
+            checksum_a: ptr::null(),
+            checksum_b: ptr::null(),
+        };
+    };
+    let Some(row) = report.rows.get(index) else {
+        return SfcReportRowData {
+            relative_path: ptr::null(),
+            status: SfcFileStatus::Changed,
+            size_a_present: false,
+            size_b_present: false,
+            size_a: 0,
+            size_b: 0,
+            checksum_a: ptr::null(),
+            checksum_b: ptr::null(),
+        };
+    };
+    SfcReportRowData {
+        relative_path: row.relative_path.as_ptr(),
+        status: row.status,
+        size_a_present: row.size_a.is_some(),
+        size_b_present: row.size_b.is_some(),
+        size_a: row.size_a.unwrap_or(0),
+        size_b: row.size_b.unwrap_or(0),
+        checksum_a: row.checksum_a.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null()),
+        checksum_b: row.checksum_b.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null()),
+    }
 }
 
 #[no_mangle]
@@ -598,6 +629,162 @@ pub unsafe extern "C" fn sfc_report_write_csv(
         }
     };
     match write_text(Path::new(&path), &report_csv(&report.report)) {
+        Ok(()) => true,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            false
+        }
+    }
+}
+
+// ── Transfer FFI ───────────────────────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_copy_file(
+    source: *const c_char,
+    dest: *const c_char,
+    progress: SfcProgressCallback,
+    cancel: SfcCancelCallback,
+    user_data: *mut c_void,
+    error_out: *mut *mut c_char,
+) -> bool {
+    let source_path = match unsafe { cstr_to_string(source, "Source path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            return false;
+        }
+    };
+    let dest_path = match unsafe { cstr_to_string(dest, "Destination path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            return false;
+        }
+    };
+
+    let mut progress_callback = |event: ProgressEvent| {
+        emit_ffi_progress(progress, user_data, event);
+    };
+    let cancel_callback = || {
+        cancel
+            .map(|callback| callback(user_data))
+            .unwrap_or(false)
+    };
+    let mut callbacks = ProgressCallbacks {
+        progress: Some(&mut progress_callback),
+        cancel: Some(&cancel_callback),
+    };
+
+    match transfer::copy_file(Path::new(&source_path), Path::new(&dest_path), &mut callbacks) {
+        Ok(()) => true,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_copy_folder(
+    source: *const c_char,
+    dest: *const c_char,
+    progress: SfcProgressCallback,
+    cancel: SfcCancelCallback,
+    user_data: *mut c_void,
+    error_out: *mut *mut c_char,
+) -> bool {
+    let source_path = match unsafe { cstr_to_string(source, "Source path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            return false;
+        }
+    };
+    let dest_path = match unsafe { cstr_to_string(dest, "Destination path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            return false;
+        }
+    };
+
+    let mut progress_callback = |event: ProgressEvent| {
+        emit_ffi_progress(progress, user_data, event);
+    };
+    let cancel_callback = || {
+        cancel
+            .map(|callback| callback(user_data))
+            .unwrap_or(false)
+    };
+    let mut callbacks = ProgressCallbacks {
+        progress: Some(&mut progress_callback),
+        cancel: Some(&cancel_callback),
+    };
+
+    match transfer::copy_folder(Path::new(&source_path), Path::new(&dest_path), &mut callbacks) {
+        Ok(()) => true,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_remove_file(
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> bool {
+    let file_path = match unsafe { cstr_to_string(path, "File path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            return false;
+        }
+    };
+    match transfer::remove_file(Path::new(&file_path)) {
+        Ok(()) => true,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_remove_folder(
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> bool {
+    let folder_path = match unsafe { cstr_to_string(path, "Folder path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe {
+                set_error(error_out, error.to_string());
+            }
+            return false;
+        }
+    };
+    match transfer::remove_folder(Path::new(&folder_path)) {
         Ok(()) => true,
         Err(error) => {
             unsafe {

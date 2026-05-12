@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
 
 use crate::compare::{CompareReport, FileStatus};
 use anyhow::{Context, Result};
@@ -126,11 +127,11 @@ fn csv_cell(value: impl AsRef<str>) -> String {
 
 pub fn report_csv(report: &CompareReport) -> String {
     let mut out = String::from(
-        "\"status\",\"relative_path\",\"size_a\",\"size_b\",\"checksum_a\",\"checksum_b\",\"xxh64_a\",\"xxh64_b\"\n",
+        "\"status\",\"relative_path\",\"size_a\",\"size_b\",\"checksum_a\",\"checksum_b\"\n",
     );
     for row in &report.rows {
         out.push_str(&format!(
-            "{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{}\n",
             csv_cell(match row.status {
                 FileStatus::Matching => "Matching",
                 FileStatus::Changed => "Changed",
@@ -149,18 +150,14 @@ pub fn report_csv(report: &CompareReport) -> String {
                     .unwrap_or_default()
             ),
             csv_cell(row.checksum_a.clone().unwrap_or_default()),
-            csv_cell(row.checksum_b.clone().unwrap_or_default()),
-            csv_cell(row.xxh64_a.clone().unwrap_or_default()),
-            csv_cell(row.xxh64_b.clone().unwrap_or_default())
+            csv_cell(row.checksum_b.clone().unwrap_or_default())
         ));
     }
     for folder in &report.folders_only_in_a {
         out.push_str(&format!(
-            "{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{}\n",
             csv_cell("FolderOnlyInA"),
             csv_cell(folder),
-            csv_cell(""),
-            csv_cell(""),
             csv_cell(""),
             csv_cell(""),
             csv_cell(""),
@@ -169,11 +166,9 @@ pub fn report_csv(report: &CompareReport) -> String {
     }
     for folder in &report.folders_only_in_b {
         out.push_str(&format!(
-            "{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{}\n",
             csv_cell("FolderOnlyInB"),
             csv_cell(folder),
-            csv_cell(""),
-            csv_cell(""),
             csv_cell(""),
             csv_cell(""),
             csv_cell(""),
@@ -184,6 +179,10 @@ pub fn report_csv(report: &CompareReport) -> String {
 }
 
 pub fn write_text(path: &Path, contents: &str) -> Result<()> {
+    let path_str = path.to_string_lossy();
+    if path_str.contains('\0') {
+        anyhow::bail!("Path contains null bytes");
+    }
     let mut file =
         File::create(path).with_context(|| format!("Unable to write {}", path.display()))?;
     file.write_all(contents.as_bytes())?;

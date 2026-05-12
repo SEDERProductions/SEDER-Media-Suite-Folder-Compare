@@ -25,6 +25,7 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/compare.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/ffi.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/report.rs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/transfer.rs"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
     COMMENT "Building Rust Folder Compare core"
     VERBATIM
@@ -47,6 +48,8 @@ set(APP_SOURCES
     src/FolderCompareWorker.cpp
     src/FolderCompareWorker.h
     src/FolderCompareUtils.h
+    src/FolderTransferWorker.cpp
+    src/FolderTransferWorker.h
 )
 
 set(SEDER_APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.icns")
@@ -130,7 +133,6 @@ target_include_directories(compare-model-tests PRIVATE
 target_link_libraries(compare-model-tests PRIVATE
     Qt6::Core
     Qt6::Test
-    seder_folder_compare_core
 )
 
 if(WIN32)

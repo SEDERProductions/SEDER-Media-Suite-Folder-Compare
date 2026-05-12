@@ -29,12 +29,24 @@ typedef enum SfcProgressStage {
     SFC_PROGRESS_SCANNING_B = 1,
     SFC_PROGRESS_CHECKSUMMING = 2,
     SFC_PROGRESS_COMPARING = 3,
-    SFC_PROGRESS_COMPLETE = 4,
-    SFC_PROGRESS_CANCELED = 5,
-    SFC_PROGRESS_FAILED = 6
+    SFC_PROGRESS_TRANSFERRING = 4,
+    SFC_PROGRESS_COMPLETE = 5,
+    SFC_PROGRESS_CANCELED = 6,
+    SFC_PROGRESS_FAILED = 7
 } SfcProgressStage;
 
 typedef struct SfcReport SfcReport;
+
+typedef struct {
+    const char *relative_path;
+    SfcFileStatus status;
+    bool size_a_present;
+    bool size_b_present;
+    uint64_t size_a;
+    uint64_t size_b;
+    const char *checksum_a;
+    const char *checksum_b;
+} SfcReportRowData;
 
 typedef void (*SfcProgressCallback)(
     SfcProgressStage stage,
@@ -61,6 +73,7 @@ void sfc_report_free(SfcReport *report);
 void sfc_string_free(char *value);
 
 size_t sfc_report_row_count(const SfcReport *report);
+SfcReportRowData sfc_report_row_get(const SfcReport *report, size_t index);
 const char *sfc_report_row_path(const SfcReport *report, size_t index);
 SfcFileStatus sfc_report_row_status(const SfcReport *report, size_t index);
 bool sfc_report_row_size_a_present(const SfcReport *report, size_t index);
@@ -69,8 +82,6 @@ uint64_t sfc_report_row_size_a(const SfcReport *report, size_t index);
 uint64_t sfc_report_row_size_b(const SfcReport *report, size_t index);
 const char *sfc_report_row_checksum_a(const SfcReport *report, size_t index);
 const char *sfc_report_row_checksum_b(const SfcReport *report, size_t index);
-const char *sfc_report_row_xxh64_a(const SfcReport *report, size_t index);
-const char *sfc_report_row_xxh64_b(const SfcReport *report, size_t index);
 
 size_t sfc_report_folder_count(const SfcReport *report, uint32_t side);
 const char *sfc_report_folder_path(const SfcReport *report, uint32_t side, size_t index);
@@ -92,6 +103,28 @@ bool sfc_report_write_txt(
     const char *title,
     char **error_out);
 bool sfc_report_write_csv(const SfcReport *report, const char *path, char **error_out);
+
+// ── Transfer operations ────────────────────────────────────────────────────
+
+bool sfc_copy_file(
+    const char *source,
+    const char *dest,
+    SfcProgressCallback progress,
+    SfcCancelCallback cancel,
+    void *user_data,
+    char **error_out);
+
+bool sfc_copy_folder(
+    const char *source,
+    const char *dest,
+    SfcProgressCallback progress,
+    SfcCancelCallback cancel,
+    void *user_data,
+    char **error_out);
+
+bool sfc_remove_file(const char *path, char **error_out);
+
+bool sfc_remove_folder(const char *path, char **error_out);
 
 #ifdef __cplusplus
 }

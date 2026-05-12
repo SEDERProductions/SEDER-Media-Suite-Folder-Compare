@@ -12,7 +12,7 @@ FolderCompareWorker::FolderCompareWorker(QString folderA, QString folderB, int m
       m_ignoreHiddenSystem(ignoreHiddenSystem), m_ignorePatterns(std::move(ignorePatterns)) {}
 
 bool FolderCompareWorker::isCanceled() const {
-    return m_canceled.load(std::memory_order_relaxed);
+    return m_canceled.load(std::memory_order_acquire);
 }
 
 void FolderCompareWorker::run() {
@@ -37,7 +37,7 @@ void FolderCompareWorker::run() {
 }
 
 void FolderCompareWorker::cancel() {
-    m_canceled.store(true, std::memory_order_relaxed);
+    m_canceled.store(true, std::memory_order_release);
 }
 
 void FolderCompareWorker::progressCallback(SfcProgressStage stage, uint64_t current, uint64_t total,

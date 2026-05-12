@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
 
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
-use std::hash::Hasher;
 use std::io::Read;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
-use twox_hash::XxHash64;
 use walkdir::WalkDir;
 
 pub const CANCELED_MESSAGE: &str = "Comparison canceled";
@@ -30,6 +29,7 @@ pub enum ProgressStage {
     ScanningB,
     Checksumming,
     Comparing,
+    Transferring,
     Complete,
     Canceled,
     Failed,
@@ -67,7 +67,6 @@ impl ProgressCallbacks<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileChecksums {
     pub blake3: String,
-    pub xxh64: String,
 }
 
 #[derive(Debug, Clone)]
@@ -109,8 +108,6 @@ pub struct ComparisonRow {
     pub size_b: Option<u64>,
     pub checksum_a: Option<String>,
     pub checksum_b: Option<String>,
-    pub xxh64_a: Option<String>,
-    pub xxh64_b: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -238,7 +235,7 @@ fn should_emit_progress(current: u64, total: u64) -> bool {
         let step = (total / 100).max(1);
         current.is_multiple_of(step)
     } else {
-        current.is_multiple_of(50)
+        current.is_multiple_of(10)
     }
 }
 
@@ -290,8 +287,7 @@ fn checksum_file_set_with_progress(
         Some(path.to_string_lossy().to_string()),
     );
 
-    let mut blake3_hasher = blake3::Hasher::new();
-    let mut xxh64_hasher = XxHash64::with_seed(0);
+    let mut hasher = blake3::Hasher::new();
     let mut file =
         File::open(path).with_context(|| format!("Unable to read {}", path.display()))?;
     let mut buffer = [0_u8; 64 * 1024];
@@ -301,13 +297,10 @@ fn checksum_file_set_with_progress(
         if read == 0 {
             break;
         }
-        let chunk = &buffer[..read];
-        blake3_hasher.update(chunk);
-        xxh64_hasher.write(chunk);
+        hasher.update(&buffer[..read]);
     }
     Ok(FileChecksums {
-        blake3: blake3_hasher.finalize().to_hex().to_string(),
-        xxh64: format!("{:016x}", xxh64_hasher.finish()),
+        blake3: hasher.finalize().to_hex().to_string(),
     })
 }
 
@@ -344,7 +337,7 @@ pub fn scan_folder_with_progress(
     {
         callbacks.check_canceled()?;
         let entry = entry?;
-        if entry.depth() == 0 || should_ignore(entry.path(), options, &matcher) {
+        if entry.depth() == 0 {
             continue;
         }
 
@@ -357,22 +350,17 @@ pub fn scan_folder_with_progress(
             continue;
         }
 
-        // Treat regular files and symlinks (resolved via std::fs::metadata below)
-        // as files. WalkDir defaults to follow_links(false), so symlinks otherwise
-        // get silently dropped here, which masks real divergences when one side
-        // resolves a symlink into a real copy of the file.
         if entry.file_type().is_file() || entry.file_type().is_symlink() {
-            let metadata = match std::fs::metadata(entry.path()) {
-                Ok(m) => m,
-                Err(_) if entry.file_type().is_symlink() => {
-                    // Broken symlink or symlink target is unreachable; skip it
-                    // rather than aborting the whole scan.
-                    continue;
+            let metadata = if entry.file_type().is_symlink() {
+                match std::fs::metadata(entry.path()) {
+                    Ok(m) => m,
+                    Err(_) => continue,
                 }
-                Err(e) => {
-                    return Err(anyhow::Error::from(e)
-                        .context(format!("Unable to stat {}", entry.path().display())));
-                }
+            } else {
+                entry.metadata().map_err(|e| {
+                    anyhow::Error::from(e)
+                        .context(format!("Unable to stat {}", entry.path().display()))
+                })?
             };
             // A symlink-to-directory resolves to a directory here; record it as
             // a folder rather than inserting a phantom file row.
@@ -482,18 +470,6 @@ pub fn compare_scans_with_progress(
                     .as_ref()
                     .map(|checksums| checksums.blake3.clone())
             }),
-            xxh64_a: left.and_then(|entry| {
-                entry
-                    .checksums
-                    .as_ref()
-                    .map(|checksums| checksums.xxh64.clone())
-            }),
-            xxh64_b: right.and_then(|entry| {
-                entry
-                    .checksums
-                    .as_ref()
-                    .map(|checksums| checksums.xxh64.clone())
-            }),
         });
     }
 
@@ -538,7 +514,7 @@ pub fn compare_folders_with_progress(
     let checksum = mode == CompareMode::PathSizeChecksum;
     let options = ScanOptions {
         ignore_hidden_system,
-        ignore_patterns: parse_ignore_patterns(&ignore_patterns),
+        ignore_patterns,
         checksum,
     };
 

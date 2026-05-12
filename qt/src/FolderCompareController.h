@@ -5,13 +5,32 @@
 #include "CompareFilterProxyModel.h"
 #include "CompareResultTableModel.h"
 #include "FolderCompareWorker.h"
+#include "FolderTransferWorker.h"
 
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QStringList>
 #include <QVariantMap>
 
 class QThread;
+
+struct TransferOp {
+    QString relativePath;
+    int originalStatus = CompareRow::Changed;
+    bool isFolder = false;
+    int direction = 1; // 0 = to A, 1 = to B
+    bool isMove = false;
+};
+
+struct UndoEntry {
+    QString relativePath;
+    int originalStatus = CompareRow::Changed;
+    QString sourceFolder;
+    QString destFolder;
+    bool wasMove = false;
+    bool isFolder = false;
+};
 
 class FolderCompareController final : public QObject {
     Q_OBJECT
@@ -40,6 +59,16 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(int totalRows READ totalRows NOTIFY totalRowsChanged)
     Q_PROPERTY(qulonglong progressCurrent READ progressCurrent NOTIFY progressChanged)
     Q_PROPERTY(qulonglong progressTotal READ progressTotal NOTIFY progressChanged)
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedCount READ selectedCount NOTIFY selectionChanged)
+    Q_PROPERTY(bool canCopyToA READ canCopyToA NOTIFY selectionChanged)
+    Q_PROPERTY(bool canCopyToB READ canCopyToB NOTIFY selectionChanged)
+    Q_PROPERTY(bool canMoveToA READ canMoveToA NOTIFY selectionChanged)
+    Q_PROPERTY(bool canMoveToB READ canMoveToB NOTIFY selectionChanged)
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoChanged)
+    Q_PROPERTY(bool transferBusy READ transferBusy NOTIFY transferBusyChanged)
+    Q_PROPERTY(int transferCurrent READ transferCurrent NOTIFY transferProgressChanged)
+    Q_PROPERTY(int transferTotal READ transferTotal NOTIFY transferProgressChanged)
 
   public:
     explicit FolderCompareController(QObject* parent = nullptr);
@@ -69,6 +98,17 @@ class FolderCompareController final : public QObject {
     qulonglong progressCurrent() const;
     qulonglong progressTotal() const;
 
+    bool hasSelection() const;
+    int selectedCount() const;
+    bool canCopyToA() const;
+    bool canCopyToB() const;
+    bool canMoveToA() const;
+    bool canMoveToB() const;
+    bool canUndo() const;
+    bool transferBusy() const;
+    int transferCurrent() const;
+    int transferTotal() const;
+
     void setFolderA(const QString& folder);
     void setFolderB(const QString& folder);
     void setMode(int mode);
@@ -86,6 +126,16 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void clearLog();
     Q_INVOKABLE QVariantMap parseDroppedFolderUrl(const QString& droppedUrl) const;
 
+    Q_INVOKABLE void toggleRowSelection(int rowIndex, int modifiers);
+    Q_INVOKABLE void clearSelection();
+    Q_INVOKABLE bool isRowSelected(int rowIndex) const;
+    Q_INVOKABLE void copySelectedToA();
+    Q_INVOKABLE void copySelectedToB();
+    Q_INVOKABLE void moveSelectedToA();
+    Q_INVOKABLE void moveSelectedToB();
+    Q_INVOKABLE void confirmOverwrite(const QString& response);
+    Q_INVOKABLE void undoLastTransfer();
+
   signals:
     void folderAChanged();
     void folderBChanged();
@@ -102,6 +152,12 @@ class FolderCompareController final : public QObject {
     void hasReportChanged();
     void totalRowsChanged();
     void progressChanged();
+    void selectionChanged();
+    void undoChanged();
+    void transferBusyChanged();
+    void transferProgressChanged();
+    void overwriteNeeded(QVariantMap fileInfo);
+    void transferOperationFinished(int succeeded, int failed);
 
   private slots:
     void handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total,
@@ -111,6 +167,7 @@ class FolderCompareController final : public QObject {
 
   private:
     enum class LogSeverity { Info, Warning, Error };
+    enum class OverwriteBatchState { NotSet, OverwriteAll, SkipAll, Canceled };
 
     void setBusy(bool busy);
     void setStatusText(const QString& status);
@@ -125,6 +182,21 @@ class FolderCompareController final : public QObject {
     static bool isTerminalStage(SfcProgressStage stage);
     static QString progressLabel(SfcProgressStage stage, qulonglong current, qulonglong total,
                                  const QString& path);
+
+    // Transfer
+    void buildTransferQueue(int direction, bool isMove);
+    void startNextTransfer();
+    void proceedWithTransfer();
+    void finishBatch();
+    void setTransferBusy(bool busy);
+    void setTransferProgress(int current, int total);
+    void emitSelectionChanged();
+    bool canTransferInDirection(int direction) const;
+    bool canMoveInDirection(int direction) const;
+    QString sourcePath(int direction, const QString& relPath) const;
+    QString destPath(int direction, const QString& relPath) const;
+    static QString formatTimestamp(qulonglong secs);
+    void handleTransferFinished(bool success, const QString& errorMessage);
 
     QString m_folderA;
     QString m_folderB;
@@ -149,4 +221,22 @@ class FolderCompareController final : public QObject {
     QString m_totalSizeText;
     qulonglong m_progressCurrent = 0;
     qulonglong m_progressTotal = 0;
+
+    // Selection and transfer
+    QSet<int> m_selectedRows;
+    int m_lastSelectedRow = -1;
+    QVector<TransferOp> m_transferQueue;
+    int m_transferSucceeded = 0;
+    int m_transferFailed = 0;
+    OverwriteBatchState m_batchOverwriteState = OverwriteBatchState::NotSet;
+    TransferOp m_currentOp;
+    QString m_currentSourcePath;
+    QString m_currentDestPath;
+    QVector<UndoEntry> m_undoStack;
+    bool m_transferBusy = false;
+    int m_transferCurrent = 0;
+    int m_transferTotal = 0;
+    QPointer<FolderTransferWorker> m_transferWorker;
+    QPointer<QThread> m_transferThread;
+    static constexpr int m_maxUndo = 50;
 };

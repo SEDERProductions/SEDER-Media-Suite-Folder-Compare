@@ -67,7 +67,7 @@ jobs:
             git add Cargo.toml Cargo.lock
             git commit -m "chore: bump version to ${new_tag}"
             git tag "$new_tag"
-            git pull --rebase origin main || true
+            git fetch origin main && git rebase origin/main
             git push origin HEAD:main
             git push origin "$new_tag"
           fi

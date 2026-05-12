@@ -73,6 +73,16 @@ FolderCompareController::~FolderCompareController() {
             m_thread->wait();
         }
     }
+    if (m_transferWorker) {
+        m_transferWorker->cancel();
+    }
+    if (m_transferThread) {
+        m_transferThread->quit();
+        if (!m_transferThread->wait(30000)) {
+            m_transferThread->terminate();
+            m_transferThread->wait();
+        }
+    }
     if (m_report) {
         sfc_report_free(m_report);
     }
@@ -508,6 +518,8 @@ QString FolderCompareController::progressLabel(SfcProgressStage stage, qulonglon
         return QStringLiteral("Checksumming %1%2").arg(count, suffix);
     case SFC_PROGRESS_COMPARING:
         return QStringLiteral("Comparing %1%2").arg(count, suffix);
+    case SFC_PROGRESS_TRANSFERRING:
+        return QStringLiteral("Transferring %1%2").arg(count, suffix);
     case SFC_PROGRESS_COMPLETE:
         return QStringLiteral("Complete");
     case SFC_PROGRESS_CANCELED:
@@ -517,4 +529,403 @@ QString FolderCompareController::progressLabel(SfcProgressStage stage, qulonglon
     default:
         return QStringLiteral("Working %1%2").arg(count, suffix);
     }
+}
+
+// ── Selection ──────────────────────────────────────────────────────────────
+
+bool FolderCompareController::hasSelection() const {
+    return !m_selectedRows.isEmpty();
+}
+
+int FolderCompareController::selectedCount() const {
+    return m_selectedRows.size();
+}
+
+void FolderCompareController::toggleRowSelection(int rowIndex, int modifiers) {
+    if (rowIndex < 0 || rowIndex >= m_tableModel.totalRows()) {
+        return;
+    }
+
+    const Qt::KeyboardModifiers mods = static_cast<Qt::KeyboardModifiers>(modifiers);
+
+    if (mods & Qt::ControlModifier) {
+        if (m_selectedRows.contains(rowIndex)) {
+            m_selectedRows.remove(rowIndex);
+        } else {
+            m_selectedRows.insert(rowIndex);
+        }
+        m_lastSelectedRow = rowIndex;
+    } else if (mods & Qt::ShiftModifier && m_lastSelectedRow >= 0) {
+        const int from = qMin(m_lastSelectedRow, rowIndex);
+        const int to = qMax(m_lastSelectedRow, rowIndex);
+        for (int i = from; i <= to; ++i) {
+            m_selectedRows.insert(i);
+        }
+    } else {
+        m_selectedRows.clear();
+        m_selectedRows.insert(rowIndex);
+        m_lastSelectedRow = rowIndex;
+    }
+
+    emitSelectionChanged();
+}
+
+void FolderCompareController::clearSelection() {
+    m_selectedRows.clear();
+    m_lastSelectedRow = -1;
+    emitSelectionChanged();
+}
+
+bool FolderCompareController::isRowSelected(int rowIndex) const {
+    return m_selectedRows.contains(rowIndex);
+}
+
+void FolderCompareController::emitSelectionChanged() {
+    emit selectionChanged();
+}
+
+bool FolderCompareController::canTransferInDirection(int direction) const {
+    if (m_selectedRows.isEmpty() || m_transferBusy) {
+        return false;
+    }
+    for (int row : m_selectedRows) {
+        const int status = m_tableModel.statusForSourceRow(row);
+        if (direction == 1) {
+            if (!(status == CompareRow::OnlyInA || status == CompareRow::Changed ||
+                  status == CompareRow::Matching || status == CompareRow::FolderOnlyInA)) {
+                return false;
+            }
+        } else {
+            if (!(status == CompareRow::OnlyInB || status == CompareRow::Changed ||
+                  status == CompareRow::Matching || status == CompareRow::FolderOnlyInB)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool FolderCompareController::canMoveInDirection(int direction) const {
+    if (m_selectedRows.isEmpty() || m_transferBusy) {
+        return false;
+    }
+    for (int row : m_selectedRows) {
+        const int status = m_tableModel.statusForSourceRow(row);
+        if (direction == 1) {
+            if (status == CompareRow::OnlyInA && !m_tableModel.isFolderRow(row)) {
+                continue;
+            }
+            if (status == CompareRow::Changed || status == CompareRow::Matching) {
+                continue;
+            }
+            return false;
+        } else {
+            if (status == CompareRow::OnlyInB && !m_tableModel.isFolderRow(row)) {
+                continue;
+            }
+            if (status == CompareRow::Changed || status == CompareRow::Matching) {
+                continue;
+            }
+            return false;
+        }
+    }
+    return canTransferInDirection(direction);
+}
+
+bool FolderCompareController::canCopyToA() const {
+    return canTransferInDirection(0);
+}
+
+bool FolderCompareController::canCopyToB() const {
+    return canTransferInDirection(1);
+}
+
+bool FolderCompareController::canMoveToA() const {
+    return canMoveInDirection(0);
+}
+
+bool FolderCompareController::canMoveToB() const {
+    return canMoveInDirection(1);
+}
+
+bool FolderCompareController::canUndo() const {
+    return !m_undoStack.isEmpty() && !m_transferBusy;
+}
+
+bool FolderCompareController::transferBusy() const {
+    return m_transferBusy;
+}
+
+int FolderCompareController::transferCurrent() const {
+    return m_transferCurrent;
+}
+
+int FolderCompareController::transferTotal() const {
+    return m_transferTotal;
+}
+
+// ── Transfer execution ─────────────────────────────────────────────────────
+
+QString FolderCompareController::sourcePath(int direction, const QString& relPath) const {
+    const QString base = (direction == 1) ? m_folderA : m_folderB;
+    return base + QStringLiteral("/") + relPath;
+}
+
+QString FolderCompareController::destPath(int direction, const QString& relPath) const {
+    const QString base = (direction == 1) ? m_folderB : m_folderA;
+    return base + QStringLiteral("/") + relPath;
+}
+
+void FolderCompareController::buildTransferQueue(int direction, bool isMove) {
+    m_transferQueue.clear();
+    for (int row : m_selectedRows) {
+        const int status = m_tableModel.statusForSourceRow(row);
+        const bool isFolder = m_tableModel.isFolderRow(row);
+        const QString relPath = m_tableModel.relativePathForRow(row);
+
+        bool valid = false;
+        if (direction == 1) {
+            valid = (status == CompareRow::OnlyInA || status == CompareRow::Changed ||
+                     status == CompareRow::Matching || status == CompareRow::FolderOnlyInA);
+        } else {
+            valid = (status == CompareRow::OnlyInB || status == CompareRow::Changed ||
+                     status == CompareRow::Matching || status == CompareRow::FolderOnlyInB);
+        }
+        if (valid) {
+            m_transferQueue.append({relPath, status, isFolder, direction, isMove});
+        }
+    }
+}
+
+void FolderCompareController::copySelectedToA() {
+    buildTransferQueue(0, false);
+    m_transferSucceeded = 0;
+    m_transferFailed = 0;
+    m_batchOverwriteState = OverwriteBatchState::NotSet;
+    setTransferProgress(0, m_transferQueue.size());
+    addLog(QStringLiteral("Copy to A: %1 items").arg(m_transferQueue.size()));
+    startNextTransfer();
+}
+
+void FolderCompareController::copySelectedToB() {
+    buildTransferQueue(1, false);
+    m_transferSucceeded = 0;
+    m_transferFailed = 0;
+    m_batchOverwriteState = OverwriteBatchState::NotSet;
+    setTransferProgress(0, m_transferQueue.size());
+    addLog(QStringLiteral("Copy to B: %1 items").arg(m_transferQueue.size()));
+    startNextTransfer();
+}
+
+void FolderCompareController::moveSelectedToA() {
+    buildTransferQueue(0, true);
+    m_transferSucceeded = 0;
+    m_transferFailed = 0;
+    m_batchOverwriteState = OverwriteBatchState::NotSet;
+    setTransferProgress(0, m_transferQueue.size());
+    addLog(QStringLiteral("Move to A: %1 items").arg(m_transferQueue.size()));
+    startNextTransfer();
+}
+
+void FolderCompareController::moveSelectedToB() {
+    buildTransferQueue(1, true);
+    m_transferSucceeded = 0;
+    m_transferFailed = 0;
+    m_batchOverwriteState = OverwriteBatchState::NotSet;
+    setTransferProgress(0, m_transferQueue.size());
+    addLog(QStringLiteral("Move to B: %1 items").arg(m_transferQueue.size()));
+    startNextTransfer();
+}
+
+void FolderCompareController::startNextTransfer() {
+    while (!m_transferQueue.isEmpty()) {
+        m_currentOp = m_transferQueue.takeFirst();
+
+        const QString srcPath = sourcePath(m_currentOp.direction, m_currentOp.relativePath);
+        const QString dstPath = destPath(m_currentOp.direction, m_currentOp.relativePath);
+        m_currentSourcePath = srcPath;
+        m_currentDestPath = dstPath;
+
+        QFileInfo destInfo(dstPath);
+        if (destInfo.exists()) {
+            if (m_batchOverwriteState == OverwriteBatchState::OverwriteAll) {
+                proceedWithTransfer();
+                return;
+            }
+            if (m_batchOverwriteState == OverwriteBatchState::SkipAll) {
+                continue;
+            }
+            if (m_batchOverwriteState == OverwriteBatchState::Canceled) {
+                m_transferQueue.clear();
+                break;
+            }
+
+            QFileInfo srcInfo(srcPath);
+            QVariantMap info;
+            info[QStringLiteral("relativePath")] = m_currentOp.relativePath;
+            info[QStringLiteral("sourceInfo")] =
+                QStringLiteral("Modified: %1, Size: %2")
+                    .arg(srcInfo.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")),
+                         QLocale().formattedDataSize(srcInfo.size(), 1,
+                                                     QLocale::DataSizeTraditionalFormat));
+            info[QStringLiteral("destInfo")] =
+                QStringLiteral("Modified: %1, Size: %2")
+                    .arg(destInfo.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")),
+                         QLocale().formattedDataSize(destInfo.size(), 1,
+                                                     QLocale::DataSizeTraditionalFormat));
+            info[QStringLiteral("sourceModified")] =
+                srcInfo.lastModified().toMSecsSinceEpoch();
+            info[QStringLiteral("destModified")] =
+                destInfo.lastModified().toMSecsSinceEpoch();
+            emit overwriteNeeded(info);
+            return;
+        }
+
+        proceedWithTransfer();
+        return;
+    }
+
+    finishBatch();
+}
+
+void FolderCompareController::proceedWithTransfer() {
+    setTransferBusy(true);
+
+    auto* thread = new QThread(this);
+    auto* worker = new FolderTransferWorker(
+        m_currentSourcePath, m_currentDestPath, m_currentOp.isFolder, m_currentOp.isMove);
+    worker->moveToThread(thread);
+    m_transferThread = thread;
+    m_transferWorker = worker;
+
+    connect(thread, &QThread::started, worker, &FolderTransferWorker::run);
+    connect(worker, &FolderTransferWorker::finished, this,
+            &FolderCompareController::handleTransferFinished);
+    connect(worker, &FolderTransferWorker::finished, thread, &QThread::quit);
+    connect(worker, &FolderTransferWorker::finished, worker, &QObject::deleteLater);
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+    addLog(QStringLiteral("Transferring %1").arg(m_currentOp.relativePath));
+    thread->start();
+}
+
+void FolderCompareController::finishBatch() {
+    setTransferBusy(false);
+    addLog(QStringLiteral("Transfer batch complete: %1 succeeded, %2 failed")
+               .arg(m_transferSucceeded)
+               .arg(m_transferFailed));
+    emit transferOperationFinished(m_transferSucceeded, m_transferFailed);
+    setStatusText(QStringLiteral("%1 transferred, %2 failed.")
+                      .arg(m_transferSucceeded)
+                      .arg(m_transferFailed));
+}
+
+void FolderCompareController::confirmOverwrite(const QString& response) {
+    if (response == QStringLiteral("overwrite")) {
+        proceedWithTransfer();
+    } else if (response == QStringLiteral("overwriteAll")) {
+        m_batchOverwriteState = OverwriteBatchState::OverwriteAll;
+        proceedWithTransfer();
+    } else if (response == QStringLiteral("skip")) {
+        startNextTransfer();
+    } else if (response == QStringLiteral("skipAll")) {
+        m_batchOverwriteState = OverwriteBatchState::SkipAll;
+        startNextTransfer();
+    } else if (response == QStringLiteral("cancel")) {
+        m_batchOverwriteState = OverwriteBatchState::Canceled;
+        m_transferQueue.clear();
+        finishBatch();
+    }
+}
+
+void FolderCompareController::handleTransferFinished(bool success, const QString& errorMessage) {
+    m_transferThread = nullptr;
+    m_transferWorker = nullptr;
+
+    if (success) {
+        m_transferSucceeded++;
+
+        UndoEntry entry;
+        entry.relativePath = m_currentOp.relativePath;
+        entry.originalStatus = m_currentOp.originalStatus;
+        entry.wasMove = m_currentOp.isMove;
+        entry.isFolder = m_currentOp.isFolder;
+        entry.sourceFolder = sourcePath(m_currentOp.direction, m_currentOp.relativePath);
+        entry.destFolder = destPath(m_currentOp.direction, m_currentOp.relativePath);
+        m_undoStack.prepend(entry);
+        if (m_undoStack.size() > m_maxUndo) {
+            m_undoStack.removeLast();
+        }
+        emit undoChanged();
+
+        addLog(QStringLiteral("Transferred: %1").arg(m_currentOp.relativePath));
+    } else {
+        m_transferFailed++;
+        addLog(QStringLiteral("Transfer failed for %1: %2")
+                   .arg(m_currentOp.relativePath, errorMessage),
+               LogSeverity::Error);
+    }
+
+    setTransferProgress(m_transferSucceeded + m_transferFailed, m_transferTotal);
+    startNextTransfer();
+}
+
+void FolderCompareController::undoLastTransfer() {
+    if (m_undoStack.isEmpty() || m_transferBusy) {
+        return;
+    }
+
+    const UndoEntry entry = m_undoStack.takeFirst();
+    emit undoChanged();
+
+    if (entry.wasMove) {
+        addLog(QStringLiteral("Undo not supported for move operations yet: %1")
+                   .arg(entry.relativePath),
+               LogSeverity::Warning);
+        m_undoStack.prepend(entry);
+        emit undoChanged();
+        return;
+    }
+
+    bool ok = false;
+    char* error = nullptr;
+    const QByteArray destPathBytes = entry.destFolder.toUtf8();
+
+    if (entry.isFolder) {
+        ok = sfc_remove_folder(destPathBytes.constData(), &error);
+    } else {
+        ok = sfc_remove_file(destPathBytes.constData(), &error);
+    }
+
+    const QString errorMsg = takeError(error);
+
+    if (ok) {
+        addLog(QStringLiteral("Undo: removed %1").arg(entry.relativePath));
+    } else {
+        addLog(QStringLiteral("Undo failed for %1: %2")
+                   .arg(entry.relativePath, errorMsg),
+               LogSeverity::Error);
+        m_undoStack.prepend(entry);
+        emit undoChanged();
+    }
+}
+
+QString FolderCompareController::formatTimestamp(qulonglong secs) {
+    const QDateTime dt = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(secs));
+    return dt.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+}
+
+void FolderCompareController::setTransferBusy(bool busy) {
+    if (m_transferBusy == busy) {
+        return;
+    }
+    m_transferBusy = busy;
+    emit transferBusyChanged();
+    emit selectionChanged();
+}
+
+void FolderCompareController::setTransferProgress(int current, int total) {
+    m_transferCurrent = current;
+    m_transferTotal = total;
+    emit transferProgressChanged();
 }

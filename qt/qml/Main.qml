@@ -488,6 +488,123 @@ ApplicationWindow {
                             }
                         }
                     }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: colors.line }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        visible: folderController.hasSelection || folderController.canUndo
+
+                        Button {
+                            Layout.fillWidth: true
+                            text: "\u25C0 Copy to A"
+                            enabled: folderController.canCopyToA
+                            onClicked: folderController.copySelectedToA()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                                font.family: window.monoFont
+                            }
+                            ToolTip.visible: hovered && !enabled
+                            ToolTip.text: "Select items with content in B to copy to A"
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Copy to B \u25B6"
+                            enabled: folderController.canCopyToB
+                            onClicked: folderController.copySelectedToB()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                                font.family: window.monoFont
+                            }
+                            ToolTip.visible: hovered && !enabled
+                            ToolTip.text: "Select items with content in A to copy to B"
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "\u25C0 Move to A"
+                            enabled: folderController.canMoveToA
+                            onClicked: folderController.moveSelectedToA()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                                font.family: window.monoFont
+                            }
+                            ToolTip.visible: hovered && !enabled
+                            ToolTip.text: "Copy selected items from B to A, then delete originals"
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Move to B \u25B6"
+                            enabled: folderController.canMoveToB
+                            onClicked: folderController.moveSelectedToB()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                                font.family: window.monoFont
+                            }
+                            ToolTip.visible: hovered && !enabled
+                            ToolTip.text: "Copy selected items from A to B, then delete originals"
+                        }
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Undo"
+                            enabled: folderController.canUndo
+                            onClicked: folderController.undoLastTransfer()
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.enabled ? colors.panelAlt : colors.bg
+                                border.color: parent.enabled ? colors.line : colors.bg
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                                font.family: window.monoFont
+                            }
+                        }
+                    }
                 }
             }
 
@@ -551,12 +668,14 @@ ApplicationWindow {
                                 required property int column
                                 required property string display
                                 required property int statusCode
-                                readonly property bool hovered: mouseArea.containsMouse
+                                readonly property bool hovered: hoverArea.containsMouse
+                                readonly property bool isSelected: folderController.isRowSelected(row)
                                 readonly property color baseColor: row % 2 === 0 ? colors.panel : colors.panelAlt
                                 readonly property color hoverColor: darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
+                                readonly property color selectedColor: darkMode ? Qt.rgba(0xac/255.0, 0x3b/255.0, 0x13/255.0, 0.25) : Qt.rgba(0xc6/255.0, 0x3b/255.0, 0x13/255.0, 0.15)
                                 implicitWidth: tableView.columnWidthProvider(column)
                                 implicitHeight: 34
-                                color: hovered ? hoverColor : baseColor
+                                color: isSelected ? selectedColor : (hovered ? hoverColor : baseColor)
                                 border.color: colors.line
                                 border.width: 1
 
@@ -575,15 +694,22 @@ ApplicationWindow {
                                     font.pixelSize: 12
                                     font.family: column === 1 || column >= 4 ? window.monoFont : window.uiFont
 
-                                    ToolTip.visible: truncated && mouseArea.containsMouse
+                                    ToolTip.visible: truncated && hoverArea.containsMouse
                                     ToolTip.text: text
                                     ToolTip.delay: 500
                                 }
 
                                 MouseArea {
-                                    id: mouseArea
+                                    id: hoverArea
                                     anchors.fill: parent
                                     hoverEnabled: true
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: function(mouse) {
+                                        folderController.toggleRowSelection(row, mouse.modifiers)
+                                        if (mouse.button === Qt.RightButton) {
+                                            contextMenu.popup()
+                                        }
+                                    }
                                 }
                             }
 
@@ -733,6 +859,185 @@ ApplicationWindow {
                 }
         }
     }
+    }
+
+    // ── Context menu ─────────────────────────────────────────────────────
+
+    Menu {
+        id: contextMenu
+        title: "Actions"
+
+        MenuItem {
+            text: "\u25C0 Copy to A"
+            enabled: folderController.canCopyToA
+            onTriggered: folderController.copySelectedToA()
+        }
+        MenuItem {
+            text: "Copy to B \u25B6"
+            enabled: folderController.canCopyToB
+            onTriggered: folderController.copySelectedToB()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: "\u25C0 Move to A"
+            enabled: folderController.canMoveToA
+            onTriggered: folderController.moveSelectedToA()
+        }
+        MenuItem {
+            text: "Move to B \u25B6"
+            enabled: folderController.canMoveToB
+            onTriggered: folderController.moveSelectedToB()
+        }
+    }
+
+    // ── Overwrite confirmation dialog ─────────────────────────────────────
+
+    Dialog {
+        id: overwriteDialog
+        title: "File Already Exists"
+        standardButtons: Dialog.NoButton
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width * 0.6, 520)
+
+        property var pendingInfo: ({})
+
+        ColumnLayout {
+            spacing: 12
+            Layout.fillWidth: true
+
+            Label {
+                text: "The destination already contains:"
+                font.bold: true
+                color: colors.text
+            }
+            Label {
+                text: pendingInfo.relativePath ? pendingInfo.relativePath : ""
+                color: colors.accent
+                font.family: window.monoFont
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Rectangle { height: 1; color: colors.line; Layout.fillWidth: true }
+
+            GridLayout {
+                columns: 2
+                columnSpacing: 16
+                rowSpacing: 4
+                Layout.fillWidth: true
+
+                Label { text: "Source:"; color: colors.muted }
+                Label {
+                    text: pendingInfo.sourceInfo ? pendingInfo.sourceInfo : ""
+                    font.family: window.monoFont
+                    color: colors.text
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Label { text: "Destination:"; color: colors.muted }
+                Label {
+                    text: pendingInfo.destInfo ? pendingInfo.destInfo : ""
+                    font.family: window.monoFont
+                    color: colors.text
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+            }
+
+            Rectangle { height: 1; color: colors.line; Layout.fillWidth: true }
+
+            Label {
+                text: "How do you want to proceed?"
+                color: colors.muted
+                font.pixelSize: 12
+            }
+
+            RowLayout {
+                spacing: 6
+                Layout.fillWidth: true
+
+                Button {
+                    Layout.fillWidth: true
+                    text: "Overwrite"
+                    onClicked: { folderController.confirmOverwrite("overwrite"); overwriteDialog.close() }
+                    background: Rectangle {
+                        radius: 5
+                        color: colors.accent
+                        border.color: colors.accentDark
+                        border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text; color: "#fff7ee"
+                        horizontalAlignment: Text.AlignHCenter; font.bold: true
+                    }
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "Overwrite All"
+                    onClicked: { folderController.confirmOverwrite("overwriteAll"); overwriteDialog.close() }
+                    background: Rectangle {
+                        radius: 5
+                        color: colors.panelAlt; border.color: colors.line; border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text; color: colors.text
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "Skip"
+                    onClicked: { folderController.confirmOverwrite("skip"); overwriteDialog.close() }
+                    background: Rectangle {
+                        radius: 5
+                        color: colors.panelAlt; border.color: colors.line; border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text; color: colors.text
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "Skip All"
+                    onClicked: { folderController.confirmOverwrite("skipAll"); overwriteDialog.close() }
+                    background: Rectangle {
+                        radius: 5
+                        color: colors.panelAlt; border.color: colors.line; border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text; color: colors.text
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "Cancel"
+                    onClicked: { folderController.confirmOverwrite("cancel"); overwriteDialog.close() }
+                    background: Rectangle {
+                        radius: 5
+                        color: colors.panelAlt; border.color: colors.line; border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text; color: colors.text
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Controller signal connections ────────────────────────────────────
+
+    Connections {
+        target: folderController
+        function onOverwriteNeeded(info) {
+            overwriteDialog.pendingInfo = info
+            overwriteDialog.open()
+        }
     }
 
     component FolderPicker: ColumnLayout {
