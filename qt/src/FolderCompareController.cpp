@@ -964,7 +964,9 @@ QVariantList FolderCompareController::buildComparisonTree() const {
             if (!current->children.contains(part)) {
                 Node child;
                 child.name = part;
-                child.relPath = (current == &root) ? part : current->relPath + QLatin1Char('/') + part;
+                child.relPath = (current == &root)
+                                    ? part
+                                    : current->relPath + QLatin1Char('/') + part;
                 current->children[part] = child;
             }
             current = &current->children[part];
