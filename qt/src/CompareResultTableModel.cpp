@@ -185,8 +185,7 @@ void CompareResultTableModel::loadFromReport(const SfcReport* report) {
         rows.reserve(fileRows + static_cast<qsizetype>(sfc_report_folder_diff_count(report)));
 
         for (qsizetype index = 0; index < fileRows; ++index) {
-            const auto rowData =
-                sfc_report_row_get(report, static_cast<size_t>(index));
+            const auto rowData = sfc_report_row_get(report, static_cast<size_t>(index));
             CompareRow row;
             row.relativePath = fromCString(rowData.relative_path);
             row.status = fromStatus(rowData.status);

@@ -53,11 +53,13 @@ FolderCompareController::FolderCompareController(QObject* parent)
             .toString();
     m_ignoreHiddenSystem = settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool();
     m_filterModel.setSourceModel(&m_tableModel);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
         if (m_theme == QStringLiteral("system")) {
             emit effectiveDarkChanged();
         }
     });
+#endif
     resetSummary();
     addLog(QStringLiteral("Folder Compare ready."));
 }
@@ -122,7 +124,11 @@ bool FolderCompareController::effectiveDark() const {
     if (m_theme == QStringLiteral("light")) {
         return false;
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     return qApp->styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#else
+    return false;
+#endif
 }
 QStringList FolderCompareController::logEntries() const {
     return m_logEntries;
@@ -773,10 +779,8 @@ void FolderCompareController::startNextTransfer() {
                     .arg(destInfo.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")),
                          QLocale().formattedDataSize(destInfo.size(), 1,
                                                      QLocale::DataSizeTraditionalFormat));
-            info[QStringLiteral("sourceModified")] =
-                srcInfo.lastModified().toMSecsSinceEpoch();
-            info[QStringLiteral("destModified")] =
-                destInfo.lastModified().toMSecsSinceEpoch();
+            info[QStringLiteral("sourceModified")] = srcInfo.lastModified().toMSecsSinceEpoch();
+            info[QStringLiteral("destModified")] = destInfo.lastModified().toMSecsSinceEpoch();
             emit overwriteNeeded(info);
             return;
         }
@@ -792,8 +796,8 @@ void FolderCompareController::proceedWithTransfer() {
     setTransferBusy(true);
 
     auto* thread = new QThread(this);
-    auto* worker = new FolderTransferWorker(
-        m_currentSourcePath, m_currentDestPath, m_currentOp.isFolder, m_currentOp.isMove);
+    auto* worker = new FolderTransferWorker(m_currentSourcePath, m_currentDestPath,
+                                            m_currentOp.isFolder, m_currentOp.isMove);
     worker->moveToThread(thread);
     m_transferThread = thread;
     m_transferWorker = worker;
@@ -902,8 +906,7 @@ void FolderCompareController::undoLastTransfer() {
     if (ok) {
         addLog(QStringLiteral("Undo: removed %1").arg(entry.relativePath));
     } else {
-        addLog(QStringLiteral("Undo failed for %1: %2")
-                   .arg(entry.relativePath, errorMsg),
+        addLog(QStringLiteral("Undo failed for %1: %2").arg(entry.relativePath, errorMsg),
                LogSeverity::Error);
         m_undoStack.prepend(entry);
         emit undoChanged();

@@ -476,8 +476,16 @@ pub unsafe extern "C" fn sfc_report_row_get(
         size_b_present: row.size_b.is_some(),
         size_a: row.size_a.unwrap_or(0),
         size_b: row.size_b.unwrap_or(0),
-        checksum_a: row.checksum_a.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null()),
-        checksum_b: row.checksum_b.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null()),
+        checksum_a: row
+            .checksum_a
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(ptr::null()),
+        checksum_b: row
+            .checksum_b
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(ptr::null()),
     }
 }
 
@@ -672,17 +680,17 @@ pub unsafe extern "C" fn sfc_copy_file(
     let mut progress_callback = |event: ProgressEvent| {
         emit_ffi_progress(progress, user_data, event);
     };
-    let cancel_callback = || {
-        cancel
-            .map(|callback| callback(user_data))
-            .unwrap_or(false)
-    };
+    let cancel_callback = || cancel.map(|callback| callback(user_data)).unwrap_or(false);
     let mut callbacks = ProgressCallbacks {
         progress: Some(&mut progress_callback),
         cancel: Some(&cancel_callback),
     };
 
-    match transfer::copy_file(Path::new(&source_path), Path::new(&dest_path), &mut callbacks) {
+    match transfer::copy_file(
+        Path::new(&source_path),
+        Path::new(&dest_path),
+        &mut callbacks,
+    ) {
         Ok(()) => true,
         Err(error) => {
             unsafe {
@@ -724,17 +732,17 @@ pub unsafe extern "C" fn sfc_copy_folder(
     let mut progress_callback = |event: ProgressEvent| {
         emit_ffi_progress(progress, user_data, event);
     };
-    let cancel_callback = || {
-        cancel
-            .map(|callback| callback(user_data))
-            .unwrap_or(false)
-    };
+    let cancel_callback = || cancel.map(|callback| callback(user_data)).unwrap_or(false);
     let mut callbacks = ProgressCallbacks {
         progress: Some(&mut progress_callback),
         cancel: Some(&cancel_callback),
     };
 
-    match transfer::copy_folder(Path::new(&source_path), Path::new(&dest_path), &mut callbacks) {
+    match transfer::copy_folder(
+        Path::new(&source_path),
+        Path::new(&dest_path),
+        &mut callbacks,
+    ) {
         Ok(()) => true,
         Err(error) => {
             unsafe {
@@ -746,10 +754,7 @@ pub unsafe extern "C" fn sfc_copy_folder(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sfc_remove_file(
-    path: *const c_char,
-    error_out: *mut *mut c_char,
-) -> bool {
+pub unsafe extern "C" fn sfc_remove_file(path: *const c_char, error_out: *mut *mut c_char) -> bool {
     let file_path = match unsafe { cstr_to_string(path, "File path") } {
         Ok(value) => value,
         Err(error) => {

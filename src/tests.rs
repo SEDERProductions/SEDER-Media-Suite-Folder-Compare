@@ -160,10 +160,18 @@ fn modified_time_comparison_detects_difference() {
     .unwrap();
     assert_eq!(report.rows.len(), 2);
 
-    let same = report.rows.iter().find(|r| r.relative_path == "same.mov").unwrap();
+    let same = report
+        .rows
+        .iter()
+        .find(|r| r.relative_path == "same.mov")
+        .unwrap();
     assert_eq!(same.status, FileStatus::Matching);
 
-    let changed = report.rows.iter().find(|r| r.relative_path == "changed.mov").unwrap();
+    let changed = report
+        .rows
+        .iter()
+        .find(|r| r.relative_path == "changed.mov")
+        .unwrap();
     assert_eq!(changed.status, FileStatus::Changed);
 }
 

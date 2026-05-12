@@ -3,17 +3,18 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 ApplicationWindow {
     id: window
-    width: Math.min(1320, Screen.availableGeometry.width * 0.9)
-    height: Math.min(860, Screen.availableGeometry.height * 0.9)
+    width: Screen ? Math.min(1320, Screen.desktopAvailableWidth * 0.9) : 1320
+    height: Screen ? Math.min(860, Screen.desktopAvailableHeight * 0.9) : 860
     minimumWidth: Qt.platform.os === "osx" ? 980 : 960
     minimumHeight: Qt.platform.os === "osx" ? 620 : 600
     visible: true
     title: "SEDER Folder Compare"
-    x: (Screen.availableGeometry.width - width) / 2
-    y: (Screen.availableGeometry.height - height) / 2
+    x: Screen ? (Screen.desktopAvailableWidth - width) / 2 : 0
+    y: Screen ? (Screen.desktopAvailableHeight - height) / 2 : 0
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
@@ -112,13 +113,14 @@ ApplicationWindow {
             clip: true
 
             ScrollView {
+                id: sidebarScroll
                 anchors.fill: parent
                 anchors.margins: 16
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 ColumnLayout {
-                    width: parent.width
+                    width: sidebarScroll.availableWidth
                     spacing: 16
 
                     ColumnLayout {
@@ -311,6 +313,7 @@ ApplicationWindow {
                             delegate: Button {
                                 required property string modelData
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 text: modelData.toUpperCase()
                                 checkable: true
                                 checked: folderController.theme === modelData
@@ -327,6 +330,7 @@ ApplicationWindow {
                                     color: parent.checked ? "#fff7ee" : colors.text
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
                                     font.pixelSize: 12
                                 }
                             }
@@ -361,6 +365,7 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             text: "Export TXT (" + window.hintText(window.exportTxtShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
@@ -375,12 +380,14 @@ ApplicationWindow {
                                 color: parent.enabled ? colors.text : colors.faint
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
                             ToolTip.text: "Run a comparison first"
                         }
                         Button {
                             Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             text: "Export CSV (" + window.hintText(window.exportCsvShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
@@ -395,6 +402,7 @@ ApplicationWindow {
                                 color: parent.enabled ? colors.text : colors.faint
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
                             ToolTip.text: "Run a comparison first"
@@ -914,7 +922,7 @@ ApplicationWindow {
                 color: colors.text
             }
             Label {
-                text: pendingInfo.relativePath ? pendingInfo.relativePath : ""
+                text: overwriteDialog.pendingInfo.relativePath ? overwriteDialog.pendingInfo.relativePath : ""
                 color: colors.accent
                 font.family: window.monoFont
                 wrapMode: Text.WordWrap
@@ -931,7 +939,7 @@ ApplicationWindow {
 
                 Label { text: "Source:"; color: colors.muted }
                 Label {
-                    text: pendingInfo.sourceInfo ? pendingInfo.sourceInfo : ""
+                    text: overwriteDialog.pendingInfo.sourceInfo ? overwriteDialog.pendingInfo.sourceInfo : ""
                     font.family: window.monoFont
                     color: colors.text
                     wrapMode: Text.WordWrap
@@ -939,7 +947,7 @@ ApplicationWindow {
                 }
                 Label { text: "Destination:"; color: colors.muted }
                 Label {
-                    text: pendingInfo.destInfo ? pendingInfo.destInfo : ""
+                    text: overwriteDialog.pendingInfo.destInfo ? overwriteDialog.pendingInfo.destInfo : ""
                     font.family: window.monoFont
                     color: colors.text
                     wrapMode: Text.WordWrap

@@ -8,8 +8,8 @@
 
 FolderTransferWorker::FolderTransferWorker(QString source, QString dest, bool isFolder, bool isMove,
                                            QObject* parent)
-    : QObject(parent), m_source(std::move(source)), m_dest(std::move(dest)),
-      m_isFolder(isFolder), m_isMove(isMove) {}
+    : QObject(parent), m_source(std::move(source)), m_dest(std::move(dest)), m_isFolder(isFolder),
+      m_isMove(isMove) {}
 
 bool FolderTransferWorker::isCanceled() const {
     return m_canceled.load(std::memory_order_acquire);
@@ -53,8 +53,9 @@ void FolderTransferWorker::run() {
         const QString removeErrorMsg = takeError(removeError);
 
         if (!removeOk) {
-            emit finished(false,
-                          QStringLiteral("Copied but failed to remove source: %1").arg(removeErrorMsg));
+            emit finished(
+                false,
+                QStringLiteral("Copied but failed to remove source: %1").arg(removeErrorMsg));
             return;
         }
     }

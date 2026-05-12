@@ -9,11 +9,13 @@ use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FileMetadata {
     pub size: u64,
     pub modified: Option<u64>,
 }
 
+#[allow(dead_code)]
 pub fn get_file_metadata(path: &Path) -> Result<FileMetadata> {
     let metadata = fs::metadata(path)?;
     let modified = metadata
@@ -27,11 +29,7 @@ pub fn get_file_metadata(path: &Path) -> Result<FileMetadata> {
     })
 }
 
-pub fn copy_file(
-    source: &Path,
-    dest: &Path,
-    callbacks: &mut ProgressCallbacks<'_>,
-) -> Result<()> {
+pub fn copy_file(source: &Path, dest: &Path, callbacks: &mut ProgressCallbacks<'_>) -> Result<()> {
     callbacks.check_canceled()?;
 
     if let Some(parent) = dest.parent() {
@@ -104,10 +102,9 @@ pub fn copy_folder(
     for (index, entry) in entries.iter().enumerate() {
         callbacks.check_canceled()?;
 
-        let rel = entry
-            .path()
-            .strip_prefix(source)
-            .with_context(|| format!("Failed to compute relative path from {}", source.display()))?;
+        let rel = entry.path().strip_prefix(source).with_context(|| {
+            format!("Failed to compute relative path from {}", source.display())
+        })?;
         let dest_path = dest.join(rel);
         let current = index as u64 + 1;
 
@@ -119,14 +116,12 @@ pub fn copy_folder(
         });
 
         if entry.file_type().is_dir() {
-            fs::create_dir_all(&dest_path).with_context(|| {
-                format!("Failed to create directory {}", dest_path.display())
-            })?;
+            fs::create_dir_all(&dest_path)
+                .with_context(|| format!("Failed to create directory {}", dest_path.display()))?;
         } else if entry.file_type().is_file() || entry.file_type().is_symlink() {
             if let Some(parent) = dest_path.parent() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("Failed to create directory {}", parent.display())
-                })?;
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create directory {}", parent.display()))?;
             }
             fs::copy(entry.path(), &dest_path).with_context(|| {
                 format!(
@@ -150,6 +145,7 @@ pub fn remove_folder(path: &Path) -> Result<()> {
         .with_context(|| format!("Failed to remove directory {}", path.display()))
 }
 
+#[allow(dead_code)]
 pub fn verify_file(path: &Path, expected_size: u64) -> Result<bool> {
     match fs::metadata(path) {
         Ok(metadata) => Ok(metadata.len() == expected_size),
