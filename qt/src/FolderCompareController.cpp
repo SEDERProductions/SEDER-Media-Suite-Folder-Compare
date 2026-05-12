@@ -8,11 +8,13 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QLocale>
-#include <QSettings>
 #include <QStyleHints>
 #include <QThread>
 #include <QUrl>
+#include <QWindow>
+
+#include <algorithm>
+#include <functional>
 
 namespace {
 constexpr auto defaultPatterns = ".DS_Store, Thumbs.db, desktop.ini, .Spotlight-V100, .Trashes";
@@ -493,12 +495,16 @@ bool FolderCompareController::hasReport() const {
 }
 
 QString FolderCompareController::pickFolder(const QString& title, const QString& current) {
-    return QFileDialog::getExistingDirectory(qApp->activeWindow(), title, current);
+    return QFileDialog::getExistingDirectory(m_parentWindow, title, current);
 }
 
 QString FolderCompareController::savePath(const QString& title, const QString& defaultName,
                                           const QString& filter) {
-    return QFileDialog::getSaveFileName(qApp->activeWindow(), title, defaultName, filter);
+    return QFileDialog::getSaveFileName(m_parentWindow, title, defaultName, filter);
+}
+
+void FolderCompareController::setParentWindow(QWindow* window) {
+    m_parentWindow = window;
 }
 
 QString FolderCompareController::formatBytes(qulonglong bytes) {
@@ -931,4 +937,108 @@ void FolderCompareController::setTransferProgress(int current, int total) {
     m_transferCurrent = current;
     m_transferTotal = total;
     emit transferProgressChanged();
+}
+
+QVariantList FolderCompareController::buildComparisonTree() const {
+    struct Node {
+        QString name;
+        QString relPath;
+        int status = -1;
+        QString sizeA;
+        QString sizeB;
+        QString checksumA;
+        QString checksumB;
+        bool isFolder = false;
+        QMap<QString, Node> children;
+    };
+
+    Node root;
+    root.isFolder = true;
+
+    for (int i = 0; i < m_tableModel.totalRows(); ++i) {
+        const QString path = m_tableModel.relativePathForRow(i);
+        const QStringList parts = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        if (parts.isEmpty()) {
+            continue;
+        }
+
+        Node* current = &root;
+        for (int j = 0; j < parts.size(); ++j) {
+            const QString& part = parts[j];
+            if (!current->children.contains(part)) {
+                Node child;
+                child.name = part;
+                child.relPath = (current == &root) ? part : current->relPath + QLatin1Char('/') + part;
+                current->children[part] = child;
+            }
+            current = &current->children[part];
+        }
+
+        current->status = m_tableModel.statusForSourceRow(i);
+        current->isFolder = m_tableModel.isFolderRow(i);
+
+        const int lastCol = m_tableModel.columnCount(QModelIndex()) - 1;
+        const QModelIndex baseIdx = m_tableModel.index(i, 0);
+        for (int col = 2; col <= lastCol; ++col) {
+            const QModelIndex idx = m_tableModel.index(i, col);
+            const QString display = m_tableModel.data(idx, Qt::DisplayRole).toString();
+            switch (col) {
+            case 2:
+                current->sizeA = display;
+                break;
+            case 3:
+                current->sizeB = display;
+                break;
+            case 4:
+                current->checksumA = display;
+                break;
+            case 5:
+                current->checksumB = display;
+                break;
+            }
+        }
+    }
+
+    std::function<void(const Node&, QVariantList&)> collect;
+    collect = [&collect](const Node& node, QVariantList& list) {
+        QStringList keys = node.children.keys();
+        std::sort(keys.begin(), keys.end(), [](const QString& a, const QString& b) {
+            return QString::compare(a, b, Qt::CaseInsensitive) < 0;
+        });
+
+        for (const QString& key : keys) {
+            const Node& childNode = node.children[key];
+            QVariantMap item;
+            item[QStringLiteral("name")] = childNode.name;
+            item[QStringLiteral("relPath")] = childNode.relPath;
+            item[QStringLiteral("status")] = childNode.status;
+            item[QStringLiteral("sizeA")] = childNode.sizeA;
+            item[QStringLiteral("sizeB")] = childNode.sizeB;
+            item[QStringLiteral("checksumA")] = childNode.checksumA;
+            item[QStringLiteral("checksumB")] = childNode.checksumB;
+            item[QStringLiteral("isFolder")] = childNode.isFolder || !childNode.children.isEmpty();
+
+            QVariantList children;
+            collect(childNode, children);
+            item[QStringLiteral("children")] = children;
+
+            int worstStatus = childNode.status;
+            if (childNode.isFolder || !childNode.children.isEmpty()) {
+                for (const QVariant& c : children) {
+                    const QVariantMap cm = c.toMap();
+                    const int cs = cm.value(QStringLiteral("status")).toInt();
+                    if (cs > worstStatus && cs >= 0) {
+                        worstStatus = cs;
+                    }
+                }
+            }
+            item[QStringLiteral("aggregateStatus")] = worstStatus;
+
+            list.append(item);
+        }
+    };
+
+    QVariantList result;
+    collect(root, result);
+    return result;
 }

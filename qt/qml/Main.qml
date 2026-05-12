@@ -623,34 +623,36 @@ ApplicationWindow {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 14
+                    anchors.margins: 0
                     spacing: 0
 
                     Row {
                         Layout.fillWidth: true
                         height: 30
-                        Repeater {
-                            model: ["Status", "Relative Path", "Size A", "Size B", showChecksums ? "Checksum A" : "", showChecksums ? "Checksum B" : ""]
-                            delegate: Rectangle {
-                                required property string modelData
-                                required property int index
-                                width: modelData === "" ? 0 : columnWidths[index]
-                                height: 30
-                                visible: modelData !== ""
-                                color: colors.panelAlt
-                                border.color: colors.line
-                                border.width: 1
-                                Label {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 8
-                                    text: modelData
-                                    color: colors.muted
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 12
-                                    font.family: window.monoFont
-                                }
+                        Rectangle { width: 30; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
+                        Rectangle {
+                            width: parent.width - 250; height: 30; color: colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Label {
+                                anchors.fill: parent; anchors.leftMargin: 8; text: "Name"
+                                color: colors.muted; verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12; font.family: window.monoFont
                             }
+                        }
+                        Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
+                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Size A"
+                                color: colors.muted; verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12; font.family: window.monoFont }
+                        }
+                        Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
+                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Size B"
+                                color: colors.muted; verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12; font.family: window.monoFont }
+                        }
+                        Rectangle { width: 90; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
+                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Status"
+                                color: colors.muted; verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12; font.family: window.monoFont }
                         }
                     }
 
@@ -658,62 +660,132 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
 
-                        TableView {
-                            id: tableView
+                        ListView {
+                            id: treeView
                             anchors.fill: parent
                             clip: true
-                            model: folderController.filterModel
+                            model: treeModel.flatItems
                             boundsBehavior: Flickable.StopAtBounds
-                            columnSpacing: 0
-                            rowSpacing: 0
-                            columnWidthProvider: function(column) {
-                                return columnWidths[column]
-                            }
-                            rowHeightProvider: function() { return 34 }
+                            spacing: 0
 
                             delegate: Rectangle {
-                                required property int row
-                                required property int column
-                                required property string display
-                                required property int statusCode
-                                readonly property bool hovered: hoverArea.containsMouse
-                                readonly property bool isSelected: folderController.isRowSelected(row)
-                                readonly property color baseColor: row % 2 === 0 ? colors.panel : colors.panelAlt
-                                readonly property color hoverColor: darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
-                                readonly property color selectedColor: darkMode ? Qt.rgba(0xac/255.0, 0x3b/255.0, 0x13/255.0, 0.25) : Qt.rgba(0xc6/255.0, 0x3b/255.0, 0x13/255.0, 0.15)
-                                implicitWidth: tableView.columnWidthProvider(column)
-                                implicitHeight: 34
-                                color: isSelected ? selectedColor : (hovered ? hoverColor : baseColor)
+                                required property var modelData
+                                required property int index
+                                readonly property var node: modelData
+                                readonly property bool hovered: rowMouse.containsMouse
+                                readonly property color baseColor: index % 2 === 0 ? colors.panel : colors.panelAlt
+                                readonly property color hoverColor: window.darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
+                                implicitWidth: treeView.width
+                                implicitHeight: 30
+                                color: hovered ? hoverColor : baseColor
                                 border.color: colors.line
                                 border.width: 1
 
-                                Behavior on color {
-                                    ColorAnimation { duration: 90 }
-                                }
+                                Behavior on color { ColorAnimation { duration: 90 } }
 
-                                Text {
+                                Row {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 8
-                                    text: column === 0 ? statusText(statusCode) : display
-                                    color: column === 0 ? statusColor(statusCode) : colors.text
-                                    elide: column === 1 ? Text.ElideMiddle : Text.ElideRight
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 12
-                                    font.family: column === 1 || column >= 4 ? window.monoFont : window.uiFont
 
-                                    ToolTip.visible: truncated && hoverArea.containsMouse
-                                    ToolTip.text: text
-                                    ToolTip.delay: 500
+                                    Item {
+                                        width: 30; height: parent.height
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: node.isFolder ? (node.expanded ? "\u25BC" : "\u25B6") : ""
+                                            color: colors.muted
+                                            font.pixelSize: 10
+                                            visible: node.isFolder && node.children.length > 0
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: node.isFolder && node.children.length > 0
+                                            onClicked: treeModel.toggleExpanded(node.relPath)
+                                        }
+                                    }
+
+                                    Item {
+                                        width: parent.width - 250; height: parent.height
+                                        RowLayout {
+                                            anchors.fill: parent; anchors.leftMargin: 6; spacing: 4
+                                            Rectangle {
+                                                width: 10; height: 10; radius: 5
+                                                Layout.alignment: Qt.AlignVCenter
+                                                color: {
+                                                    var s = node.aggregateStatus !== undefined ? node.aggregateStatus : node.status
+                                                    if (s === 0) return colors.good
+                                                    if (s === 1) return colors.bad
+                                                    if (s === 2 || s === 4) return colors.warn
+                                                    if (s === 3 || s === 5) return "#a47a3a"
+                                                    return colors.faint
+                                                }
+                                            }
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: node.name
+                                                color: colors.text
+                                                elide: Text.ElideMiddle
+                                                verticalAlignment: Text.AlignVCenter
+                                                font.pixelSize: 12
+                                                font.family: window.monoFont
+                                                leftPadding: node.depth * 16
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle { width: 80; height: parent.height; color: "transparent"
+                                        Text {
+                                            anchors.fill: parent; anchors.leftMargin: 8
+                                            text: node.sizeA || ""
+                                            color: node.sizeA ? colors.text : colors.faint
+                                            elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                    }
+
+                                    Rectangle { width: 80; height: parent.height; color: "transparent"
+                                        Text {
+                                            anchors.fill: parent; anchors.leftMargin: 8
+                                            text: node.sizeB || ""
+                                            color: node.sizeB ? colors.text : colors.faint
+                                            elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                    }
+
+                                    Rectangle { width: 90; height: parent.height; color: "transparent"
+                                        Text {
+                                            anchors.fill: parent; anchors.leftMargin: 6
+                                            text: {
+                                                var s = node.status
+                                                if (s === 0) return "\u2713 Match"
+                                                if (s === 1) return "\u2717 Changed"
+                                                if (s === 2) return "\u25B8 Only A"
+                                                if (s === 3) return "\u25B8 Only B"
+                                                if (s === 4) return "Folder (A)"
+                                                if (s === 5) return "Folder (B)"
+                                                return ""
+                                            }
+                                            color: {
+                                                var s = node.status
+                                                if (s === 0) return colors.good
+                                                if (s === 1) return colors.bad
+                                                if (s >= 2) return colors.warn
+                                                return colors.faint
+                                            }
+                                            elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                    }
                                 }
 
                                 MouseArea {
-                                    id: hoverArea
+                                    id: rowMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: function(mouse) {
-                                        folderController.toggleRowSelection(row, mouse.modifiers)
+                                        if (node.isFolder && node.children.length > 0) {
+                                            treeModel.toggleExpanded(node.relPath)
+                                        }
                                         if (mouse.button === Qt.RightButton) {
                                             contextMenu.popup()
                                         }
@@ -722,15 +794,13 @@ ApplicationWindow {
                             }
 
                             ScrollBar.vertical: ScrollBar {}
-                            ScrollBar.horizontal: ScrollBar {}
                         }
 
                         Rectangle {
                             anchors.fill: parent
-                            visible: tableView.rows === 0
+                            visible: treeModel.flatItems.length === 0
                             color: colors.bg
-                            border.color: colors.line
-                            border.width: 1
+                            border.color: colors.line; border.width: 1
                             Label {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width - 80, 520)
@@ -1048,6 +1118,66 @@ ApplicationWindow {
         }
     }
 
+    // ── Tree model for comparison results ─────────────────────────────────
+
+    QtObject {
+        id: treeModel
+
+        property var fullTree: []
+        property var expandedPaths: ({})
+        property var flatItems: []
+
+        function rebuild() {
+            fullTree = folderController.buildComparisonTree()
+            expandedPaths = {}
+            flattenTree()
+        }
+
+        function toggleExpanded(relPath) {
+            if (expandedPaths[relPath] !== undefined) {
+                delete expandedPaths[relPath]
+            } else {
+                expandedPaths[relPath] = true
+            }
+            flattenTree()
+        }
+
+        function flattenTree() {
+            var items = []
+            function walk(nodes, depth) {
+                for (var i = 0; i < nodes.length; i++) {
+                    var node = nodes[i]
+                    items.push({
+                        name: node.name,
+                        relPath: node.relPath,
+                        status: node.status,
+                        aggregateStatus: node.aggregateStatus,
+                        sizeA: node.sizeA,
+                        sizeB: node.sizeB,
+                        checksumA: node.checksumA,
+                        checksumB: node.checksumB,
+                        isFolder: node.isFolder,
+                        children: node.children,
+                        depth: depth,
+                        expanded: expandedPaths[node.relPath] !== undefined
+                    })
+                    if (items[items.length - 1].isFolder && node.children.length > 0 && items[items.length - 1].expanded) {
+                        walk(node.children, depth + 1)
+                    }
+                }
+            }
+            walk(fullTree, 0)
+            flatItems = items
+        }
+
+        Connections {
+            target: folderController
+            function onHasReportChanged() { if (folderController.hasReport) treeModel.rebuild() }
+        }
+    }
+
+    // ── FolderPicker component ──────────────────────────────────────────────
+
     component FolderPicker: ColumnLayout {
         property string label
         property string path
@@ -1182,5 +1312,4 @@ ApplicationWindow {
         }
     }
 
-    property var columnWidths: showChecksums ? [110, 320, 80, 80, 170, 170] : [110, 400, 100, 100, 0, 0]
 }
