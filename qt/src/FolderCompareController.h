@@ -135,6 +135,7 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void moveSelectedToB();
     Q_INVOKABLE void confirmOverwrite(const QString& response);
     Q_INVOKABLE void undoLastTransfer();
+    Q_INVOKABLE QVariantList buildComparisonTree() const;
 
   signals:
     void folderAChanged();
