@@ -122,7 +122,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.*"
+          version: "6.4.2"
           cache: true
 
       - name: Install Linux build dependencies
