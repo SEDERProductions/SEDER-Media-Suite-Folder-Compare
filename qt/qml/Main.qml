@@ -113,13 +113,14 @@ ApplicationWindow {
             clip: true
 
             ScrollView {
+                id: sidebarScroll
                 anchors.fill: parent
                 anchors.margins: 16
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 ColumnLayout {
-                    width: parent.width
+                    width: sidebarScroll.availableWidth
                     spacing: 16
 
                     ColumnLayout {
@@ -312,6 +313,7 @@ ApplicationWindow {
                             delegate: Button {
                                 required property string modelData
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 text: modelData.toUpperCase()
                                 checkable: true
                                 checked: folderController.theme === modelData
@@ -328,6 +330,7 @@ ApplicationWindow {
                                     color: parent.checked ? "#fff7ee" : colors.text
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
                                     font.pixelSize: 12
                                 }
                             }
@@ -362,6 +365,7 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             text: "Export TXT (" + window.hintText(window.exportTxtShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
@@ -376,12 +380,14 @@ ApplicationWindow {
                                 color: parent.enabled ? colors.text : colors.faint
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
                             ToolTip.text: "Run a comparison first"
                         }
                         Button {
                             Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             text: "Export CSV (" + window.hintText(window.exportCsvShortcut) + ")"
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
@@ -396,6 +402,7 @@ ApplicationWindow {
                                 color: parent.enabled ? colors.text : colors.faint
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
                             ToolTip.text: "Run a comparison first"
