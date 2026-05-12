@@ -14,7 +14,6 @@
 #include <QVariantMap>
 
 class QThread;
-class QWindow;
 
 struct TransferOp {
     QString relativePath;
@@ -119,15 +118,6 @@ class FolderCompareController final : public QObject {
 
     Q_INVOKABLE void chooseFolderA();
     Q_INVOKABLE void chooseFolderB();
-    Q_INVOKABLE void startComparison();
-    Q_INVOKABLE void cancelComparison();
-    Q_INVOKABLE void exportTxt();
-    Q_INVOKABLE void exportCsv();
-    Q_INVOKABLE void setFilterMode(int mode);
-    Q_INVOKABLE void clearLog();
-    Q_INVOKABLE QVariantMap parseDroppedFolderUrl(const QString& droppedUrl) const;
-
-    void setParentWindow(QWindow* window);
 
     Q_INVOKABLE void toggleRowSelection(int rowIndex, int modifiers);
     Q_INVOKABLE void clearSelection();
@@ -243,5 +233,4 @@ class FolderCompareController final : public QObject {
     QPointer<FolderTransferWorker> m_transferWorker;
     QPointer<QThread> m_transferThread;
     static constexpr int m_maxUndo = 50;
-    QPointer<QWindow> m_parentWindow;
 };

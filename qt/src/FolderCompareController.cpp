@@ -8,10 +8,10 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QSettings>
 #include <QStyleHints>
 #include <QThread>
 #include <QUrl>
-#include <QWindow>
 
 #include <algorithm>
 #include <functional>
@@ -495,16 +495,12 @@ bool FolderCompareController::hasReport() const {
 }
 
 QString FolderCompareController::pickFolder(const QString& title, const QString& current) {
-    return QFileDialog::getExistingDirectory(m_parentWindow, title, current);
+    return QFileDialog::getExistingDirectory(nullptr, title, current);
 }
 
 QString FolderCompareController::savePath(const QString& title, const QString& defaultName,
                                           const QString& filter) {
-    return QFileDialog::getSaveFileName(m_parentWindow, title, defaultName, filter);
-}
-
-void FolderCompareController::setParentWindow(QWindow* window) {
-    m_parentWindow = window;
+    return QFileDialog::getSaveFileName(nullptr, title, defaultName, filter);
 }
 
 QString FolderCompareController::formatBytes(qulonglong bytes) {

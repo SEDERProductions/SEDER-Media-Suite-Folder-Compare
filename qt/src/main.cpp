@@ -8,7 +8,6 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QUrl>
-#include <QWindow>
 
 #ifndef APP_VERSION
 #define APP_VERSION "0.1.4"
@@ -32,10 +31,6 @@ int main(int argc, char* argv[]) {
     engine.load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) {
         return 1;
-    }
-
-    if (auto* window = qobject_cast<QWindow*>(engine.rootObjects().first())) {
-        controller.setParentWindow(window);
     }
 
     return app.exec();

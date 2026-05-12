@@ -669,7 +669,6 @@ ApplicationWindow {
                             spacing: 0
 
                             delegate: Rectangle {
-                                required property var modelData
                                 required property int index
                                 readonly property var node: modelData
                                 readonly property bool hovered: rowMouse.containsMouse
