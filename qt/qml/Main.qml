@@ -152,13 +152,13 @@ ApplicationWindow {
                     FolderPicker {
                         label: "Folder A"
                         path: folderController.folderA
-                        action: function() { folderController.chooseFolderA() }
+                        pickAction: function() { folderController.chooseFolderA() }
                         onDroppedFolder: function(folder) { folderController.folderA = folder }
                     }
                     FolderPicker {
                         label: "Folder B"
                         path: folderController.folderB
-                        action: function() { folderController.chooseFolderB() }
+                        pickAction: function() { folderController.chooseFolderB() }
                         onDroppedFolder: function(folder) { folderController.folderB = folder }
                     }
 
@@ -670,6 +670,7 @@ ApplicationWindow {
 
                             delegate: Rectangle {
                                 required property int index
+                                required property var modelData
                                 readonly property var node: modelData
                                 readonly property bool hovered: rowMouse.containsMouse
                                 readonly property color baseColor: index % 2 === 0 ? colors.panel : colors.panelAlt
@@ -1178,9 +1179,10 @@ ApplicationWindow {
     // ── FolderPicker component ──────────────────────────────────────────────
 
     component FolderPicker: ColumnLayout {
+        id: picker
         property string label
         property string path
-        property var action
+        property var pickAction
         property var onDroppedFolder
         property string validationError: ""
 
@@ -1192,9 +1194,9 @@ ApplicationWindow {
             spacing: 8
 
             Button {
-                text: label
+                text: picker.label
                 enabled: !folderController.busy
-                onClicked: action()
+                onClicked: picker.pickAction()
                 background: Rectangle {
                     radius: 5
                     color: parent.down ? colors.accentDark : colors.panelAlt
