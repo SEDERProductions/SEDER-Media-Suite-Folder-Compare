@@ -23,7 +23,7 @@ ApplicationWindow {
     readonly property bool showChecksums: folderController.mode === 2
     readonly property real railWidthRatio: width < 1200 ? 0.34 : 0.3
     readonly property int leftRailWidth: Math.max(300, Math.min(420, Math.round(width * railWidthRatio)))
-    readonly property string appVersionLabel: Qt.application.version && Qt.application.version.length > 0 ? Qt.application.version : "0.1.4"
+    readonly property string appVersionLabel: Qt.application.version && Qt.application.version.length > 0 ? Qt.application.version : ""
 
     QtObject {
         id: colors
@@ -1168,11 +1168,11 @@ ApplicationWindow {
             walk(fullTree, 0)
             flatItems = items
         }
+    }
 
-        Connections {
-            target: folderController
-            function onHasReportChanged() { if (folderController.hasReport) treeModel.rebuild() }
-        }
+    Connections {
+        target: folderController
+        function onHasReportChanged() { if (folderController.hasReport) treeModel.rebuild() }
     }
 
     // ── FolderPicker component ──────────────────────────────────────────────

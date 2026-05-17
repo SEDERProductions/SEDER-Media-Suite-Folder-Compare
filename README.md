@@ -1,7 +1,7 @@
 # SEDER Media Suite Folder Compare
 
-[![CI](https://github.com/sederproductions/seder-folder-compare/actions/workflows/ci.yml/badge.svg)](https://github.com/sederproductions/seder-folder-compare/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/sederproductions/seder-folder-compare?label=download)](https://github.com/sederproductions/seder-folder-compare/releases/latest)
+[![CI](https://github.com/SEDERProductions/SEDER-Media-Suite-Folder-Compare/actions/workflows/ci.yml/badge.svg)](https://github.com/SEDERProductions/SEDER-Media-Suite-Folder-Compare/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/SEDERProductions/SEDER-Media-Suite-Folder-Compare?label=download)](https://github.com/SEDERProductions/SEDER-Media-Suite-Folder-Compare/releases/latest)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
 SEDER Media Suite Folder Compare is a local-first desktop utility for recursively comparing two folders in post-production, editorial, DIT, and archive workflows.
@@ -10,7 +10,7 @@ SEDER Media Suite Folder Compare is a local-first desktop utility for recursivel
 
 Download the latest macOS, Windows, and Linux builds from:
 
-[GitHub Releases](https://github.com/sederproductions/seder-folder-compare/releases/latest)
+[GitHub Releases](https://github.com/SEDERProductions/SEDER-Media-Suite-Folder-Compare/releases/latest)
 
 Builds are ad-hoc signed by SEDER Productions for tamper-detection. On macOS, you may still need to right-click the app → Open the first time, or approve it in **System Settings > Privacy & Security**. Windows SmartScreen will show a "More info → Run anyway" prompt — Apple notarization and a paid Windows Authenticode certificate are not configured.
 
