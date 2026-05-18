@@ -63,17 +63,20 @@ pub fn copy_file(source: &Path, dest: &Path, callbacks: &mut ProgressCallbacks<'
             .write_all(&buffer[..read])
             .with_context(|| format!("Failed to write destination {}", dest.display()))?;
         transferred = transferred.saturating_add(read as u64);
-        callbacks.emit(ProgressEvent {
-            stage: ProgressStage::Transferring,
-            current: transferred,
-            total,
-            path: Some(
-                dest.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-                    .to_string(),
-            ),
-        });
+        callbacks.emit(
+            ProgressEvent::new(
+                ProgressStage::Transferring,
+                transferred,
+                total,
+                Some(
+                    dest.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_string(),
+                ),
+            )
+            .with_bytes(transferred, total),
+        );
     }
 
     dest_file.flush()?;
@@ -108,12 +111,12 @@ pub fn copy_folder(
         let dest_path = dest.join(rel);
         let current = index as u64 + 1;
 
-        callbacks.emit(ProgressEvent {
-            stage: ProgressStage::Transferring,
+        callbacks.emit(ProgressEvent::new(
+            ProgressStage::Transferring,
             current,
             total,
-            path: Some(rel.to_string_lossy().to_string()),
-        });
+            Some(rel.to_string_lossy().to_string()),
+        ));
 
         if entry.file_type().is_dir() {
             fs::create_dir_all(&dest_path)

@@ -2,8 +2,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::compare::{
-    compare_folders_with_progress, CompareMode, CompareReport, FileStatus, ProgressCallbacks,
-    ProgressEvent, ProgressStage, CANCELED_MESSAGE,
+    compare_folders_with_progress, CompareMode, CompareReport, CompareTolerance, FileStatus,
+    ProgressCallbacks, ProgressEvent, ProgressStage, CANCELED_MESSAGE,
 };
 use crate::report::{compare_summary, report_csv, report_txt, write_text};
 use crate::transfer; // ── ADDED ───────────────────────────────────────────
@@ -19,6 +19,8 @@ pub enum SfcCompareMode {
     PathSize = 0,
     PathSizeModified = 1,
     PathSizeChecksum = 2,
+    MediaMetadata = 3,
+    PerceptualHash = 4,
 }
 
 #[repr(C)]
@@ -28,6 +30,7 @@ pub enum SfcFileStatus {
     Changed = 1,
     OnlyInA = 2,
     OnlyInB = 3,
+    Renamed = 4,
 }
 
 #[repr(C)]
@@ -65,6 +68,11 @@ pub struct SfcCompareRequest {
     pub progress: SfcProgressCallback,
     pub cancel: SfcCancelCallback,
     pub user_data: *mut c_void,
+    pub tolerance_mtime_secs: u64,
+    pub tolerance_duration_ms: u64,
+    pub tolerance_phash_hamming: u32,
+    pub follow_symlinks: bool,
+    pub detect_renames: bool,
 }
 
 #[repr(C)]
@@ -101,6 +109,8 @@ fn compare_mode_from_ffi(mode: SfcCompareMode) -> CompareMode {
         SfcCompareMode::PathSize => CompareMode::PathSize,
         SfcCompareMode::PathSizeModified => CompareMode::PathSizeModified,
         SfcCompareMode::PathSizeChecksum => CompareMode::PathSizeChecksum,
+        SfcCompareMode::MediaMetadata => CompareMode::MediaMetadata,
+        SfcCompareMode::PerceptualHash => CompareMode::PerceptualHash,
     }
 }
 
@@ -110,6 +120,7 @@ fn file_status_to_ffi(status: &FileStatus) -> SfcFileStatus {
         FileStatus::Changed => SfcFileStatus::Changed,
         FileStatus::OnlyInA => SfcFileStatus::OnlyInA,
         FileStatus::OnlyInB => SfcFileStatus::OnlyInB,
+        FileStatus::Renamed => SfcFileStatus::Renamed,
     }
 }
 
@@ -266,12 +277,33 @@ pub unsafe extern "C" fn sfc_compare_folders(
         cancel: Some(&cancel_callback),
     };
 
+    let tolerance = CompareTolerance {
+        mtime_secs: if request.tolerance_mtime_secs == 0 {
+            CompareTolerance::default().mtime_secs
+        } else {
+            request.tolerance_mtime_secs
+        },
+        duration_ms: if request.tolerance_duration_ms == 0 {
+            CompareTolerance::default().duration_ms
+        } else {
+            request.tolerance_duration_ms
+        },
+        phash_hamming: if request.tolerance_phash_hamming == 0 {
+            CompareTolerance::default().phash_hamming
+        } else {
+            request.tolerance_phash_hamming
+        },
+    };
+
     match compare_folders_with_progress(
         Path::new(&folder_a),
         Path::new(&folder_b),
         compare_mode_from_ffi(request.mode),
         request.ignore_hidden_system,
         vec![ignore_patterns],
+        tolerance,
+        request.follow_symlinks,
+        request.detect_renames,
         &mut callbacks,
     ) {
         Ok(report) => ffi_report(report),
@@ -285,12 +317,7 @@ pub unsafe extern "C" fn sfc_compare_folders(
             emit_ffi_progress(
                 progress,
                 user_data_value as *mut c_void,
-                ProgressEvent {
-                    stage,
-                    current: 0,
-                    total: 0,
-                    path: Some(message.clone()),
-                },
+                ProgressEvent::new(stage, 0, 0, Some(message.clone())),
             );
             unsafe {
                 set_error(error_out, message);

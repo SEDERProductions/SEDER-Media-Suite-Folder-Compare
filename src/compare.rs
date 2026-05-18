@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+use crate::media::MediaInfo;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -21,6 +22,25 @@ pub enum CompareMode {
     PathSize,
     PathSizeModified,
     PathSizeChecksum,
+    MediaMetadata,
+    PerceptualHash,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompareTolerance {
+    pub mtime_secs: u64,
+    pub duration_ms: u64,
+    pub phash_hamming: u32,
+}
+
+impl Default for CompareTolerance {
+    fn default() -> Self {
+        Self {
+            mtime_secs: 2,
+            duration_ms: 200,
+            phash_hamming: 6,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +61,30 @@ pub struct ProgressEvent {
     pub current: u64,
     pub total: u64,
     pub path: Option<String>,
+    /// Bytes processed during a transfer or checksum operation.
+    /// Populated by `transfer::copy_file` and `sync::execute_plan`; zero elsewhere.
+    pub bytes_done: u64,
+    /// Total bytes expected for the current operation. Zero if unknown.
+    pub bytes_total: u64,
+}
+
+impl ProgressEvent {
+    pub fn new(stage: ProgressStage, current: u64, total: u64, path: Option<String>) -> Self {
+        Self {
+            stage,
+            current,
+            total,
+            path,
+            bytes_done: 0,
+            bytes_total: 0,
+        }
+    }
+
+    pub fn with_bytes(mut self, done: u64, total: u64) -> Self {
+        self.bytes_done = done;
+        self.bytes_total = total;
+        self
+    }
 }
 
 #[derive(Default)]
@@ -75,6 +119,7 @@ pub struct FileEntry {
     pub size: u64,
     pub modified: Option<u64>,
     pub checksums: Option<FileChecksums>,
+    pub media: Option<MediaInfo>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -90,6 +135,20 @@ pub struct ScanOptions {
     pub ignore_hidden_system: bool,
     pub ignore_patterns: Vec<String>,
     pub checksum: bool,
+    pub probe_media: bool,
+    pub follow_symlinks: bool,
+}
+
+impl Default for ScanOptions {
+    fn default() -> Self {
+        Self {
+            ignore_hidden_system: true,
+            ignore_patterns: Vec::new(),
+            checksum: false,
+            probe_media: false,
+            follow_symlinks: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +157,9 @@ pub enum FileStatus {
     Changed,
     OnlyInA,
     OnlyInB,
+    /// File present in A under one path and in B under a different path,
+    /// identified as the same content via size + checksum or pHash.
+    Renamed,
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +170,10 @@ pub struct ComparisonRow {
     pub size_b: Option<u64>,
     pub checksum_a: Option<String>,
     pub checksum_b: Option<String>,
+    /// For `Renamed` rows, the original path in A. `None` otherwise.
+    pub rename_from: Option<String>,
+    /// For `Renamed` rows, the new path in B. `None` otherwise.
+    pub rename_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -252,12 +318,7 @@ fn emit_progress(
             ProgressStage::Complete | ProgressStage::Canceled | ProgressStage::Failed
         )
     {
-        callbacks.emit(ProgressEvent {
-            stage,
-            current,
-            total,
-            path,
-        });
+        callbacks.emit(ProgressEvent::new(stage, current, total, path));
     }
 }
 
@@ -331,7 +392,12 @@ pub fn scan_folder_with_progress(
         Some(root.display().to_string()),
     );
 
-    for entry in WalkDir::new(root)
+    let walker = if options.follow_symlinks {
+        WalkDir::new(root).follow_links(true)
+    } else {
+        WalkDir::new(root).follow_links(false)
+    };
+    for entry in walker
         .into_iter()
         .filter_entry(|entry| entry.depth() == 0 || !should_ignore(entry.path(), options, &matcher))
     {
@@ -351,7 +417,7 @@ pub fn scan_folder_with_progress(
         }
 
         if entry.file_type().is_file() || entry.file_type().is_symlink() {
-            let metadata = if entry.file_type().is_symlink() {
+            let metadata = if entry.file_type().is_symlink() && !options.follow_symlinks {
                 match std::fs::metadata(entry.path()) {
                     Ok(m) => m,
                     Err(_) => continue,
@@ -386,6 +452,11 @@ pub fn scan_folder_with_progress(
             } else {
                 None
             };
+            let media = if options.probe_media {
+                crate::media::probe(entry.path()).ok().flatten()
+            } else {
+                None
+            };
             result.total_size = result.total_size.saturating_add(metadata.len());
             result.files.insert(
                 rel.clone(),
@@ -394,6 +465,7 @@ pub fn scan_folder_with_progress(
                     size: metadata.len(),
                     modified,
                     checksums,
+                    media,
                 },
             );
         }
@@ -402,21 +474,68 @@ pub fn scan_folder_with_progress(
     Ok(result)
 }
 
-fn files_match(a: &FileEntry, b: &FileEntry, mode: CompareMode) -> bool {
+fn modified_within_tolerance(a: Option<u64>, b: Option<u64>, tolerance_secs: u64) -> bool {
+    match (a, b) {
+        (Some(av), Some(bv)) => av.abs_diff(bv) <= tolerance_secs,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn duration_within_tolerance(a: Option<u32>, b: Option<u32>, tolerance_ms: u64) -> bool {
+    match (a, b) {
+        (Some(av), Some(bv)) => (av as u64).abs_diff(bv as u64) <= tolerance_ms,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn files_match(a: &FileEntry, b: &FileEntry, mode: CompareMode, tol: CompareTolerance) -> bool {
     match mode {
         CompareMode::PathSize => a.size == b.size,
-        CompareMode::PathSizeModified => a.size == b.size && a.modified == b.modified,
+        CompareMode::PathSizeModified => {
+            a.size == b.size && modified_within_tolerance(a.modified, b.modified, tol.mtime_secs)
+        }
         CompareMode::PathSizeChecksum => {
             a.size == b.size
                 && a.checksums.as_ref().map(|checksums| &checksums.blake3)
                     == b.checksums.as_ref().map(|checksums| &checksums.blake3)
         }
+        CompareMode::MediaMetadata => match (&a.media, &b.media) {
+            (Some(am), Some(bm)) => {
+                am.kind == bm.kind
+                    && am.width == bm.width
+                    && am.height == bm.height
+                    && duration_within_tolerance(am.duration_ms, bm.duration_ms, tol.duration_ms)
+                    && am.sample_rate == bm.sample_rate
+            }
+            (None, None) => a.size == b.size,
+            _ => false,
+        },
+        CompareMode::PerceptualHash => match (a.media.as_ref(), b.media.as_ref()) {
+            (Some(am), Some(bm)) => match (am.phash, bm.phash) {
+                (Some(ah), Some(bh)) => {
+                    let hamming = (ah ^ bh).count_ones();
+                    hamming <= tol.phash_hamming
+                }
+                _ => {
+                    a.size == b.size
+                        && a.checksums.as_ref().map(|c| &c.blake3)
+                            == b.checksums.as_ref().map(|c| &c.blake3)
+                }
+            },
+            _ => {
+                a.size == b.size
+                    && a.checksums.as_ref().map(|c| &c.blake3)
+                        == b.checksums.as_ref().map(|c| &c.blake3)
+            }
+        },
     }
 }
 
 pub fn compare_scans(a: &ScanResult, b: &ScanResult, mode: CompareMode) -> CompareReport {
     let mut callbacks = ProgressCallbacks::default();
-    compare_scans_with_progress(a, b, mode, &mut callbacks)
+    compare_scans_with_progress(a, b, mode, CompareTolerance::default(), &mut callbacks)
         .expect("comparison without cancellation should not fail")
 }
 
@@ -424,6 +543,7 @@ pub fn compare_scans_with_progress(
     a: &ScanResult,
     b: &ScanResult,
     mode: CompareMode,
+    tolerance: CompareTolerance,
     callbacks: &mut ProgressCallbacks<'_>,
 ) -> Result<CompareReport> {
     let mut keys = BTreeSet::new();
@@ -447,7 +567,7 @@ pub fn compare_scans_with_progress(
         let left = a.files.get(&key);
         let right = b.files.get(&key);
         let status = match (left, right) {
-            (Some(l), Some(r)) if files_match(l, r, mode) => FileStatus::Matching,
+            (Some(l), Some(r)) if files_match(l, r, mode, tolerance) => FileStatus::Matching,
             (Some(_), Some(_)) => FileStatus::Changed,
             (Some(_), None) => FileStatus::OnlyInA,
             (None, Some(_)) => FileStatus::OnlyInB,
@@ -470,6 +590,8 @@ pub fn compare_scans_with_progress(
                     .as_ref()
                     .map(|checksums| checksums.blake3.clone())
             }),
+            rename_from: None,
+            rename_to: None,
         });
     }
 
@@ -482,6 +604,93 @@ pub fn compare_scans_with_progress(
         // Combined size of both sides (a file present on both sides counts twice)
         total_size: a.total_size.saturating_add(b.total_size),
     })
+}
+
+/// Run rename detection over a report's `OnlyInA`/`OnlyInB` rows.
+///
+/// A pair of (OnlyInA, OnlyInB) rows is reclassified as `Renamed` when they share size
+/// and (in order of preference) the same BLAKE3 checksum, or the same pHash within the
+/// configured Hamming tolerance.
+pub fn detect_renames(
+    report: &mut CompareReport,
+    a: &ScanResult,
+    b: &ScanResult,
+    tol: CompareTolerance,
+) {
+    let mut a_only: Vec<usize> = Vec::new();
+    let mut b_only: Vec<usize> = Vec::new();
+    for (idx, row) in report.rows.iter().enumerate() {
+        match row.status {
+            FileStatus::OnlyInA => a_only.push(idx),
+            FileStatus::OnlyInB => b_only.push(idx),
+            _ => {}
+        }
+    }
+    let mut consumed_b: BTreeSet<usize> = BTreeSet::new();
+    for ai in a_only {
+        let a_row = &report.rows[ai];
+        let a_entry = match a.files.get(&a_row.relative_path) {
+            Some(e) => e,
+            None => continue,
+        };
+        let mut matched: Option<usize> = None;
+        for bi in &b_only {
+            if consumed_b.contains(bi) {
+                continue;
+            }
+            let b_row = &report.rows[*bi];
+            let b_entry = match b.files.get(&b_row.relative_path) {
+                Some(e) => e,
+                None => continue,
+            };
+            if a_entry.size != b_entry.size {
+                continue;
+            }
+            let checksum_match = match (a_entry.checksums.as_ref(), b_entry.checksums.as_ref()) {
+                (Some(x), Some(y)) => x.blake3 == y.blake3,
+                _ => false,
+            };
+            let phash_match = match (
+                a_entry.media.as_ref().and_then(|m| m.phash),
+                b_entry.media.as_ref().and_then(|m| m.phash),
+            ) {
+                (Some(x), Some(y)) => (x ^ y).count_ones() <= tol.phash_hamming,
+                _ => false,
+            };
+            if checksum_match || phash_match {
+                matched = Some(*bi);
+                break;
+            }
+        }
+        if let Some(bi) = matched {
+            consumed_b.insert(bi);
+            let from = report.rows[ai].relative_path.clone();
+            let to = report.rows[bi].relative_path.clone();
+            report.rows[ai].status = FileStatus::Renamed;
+            report.rows[ai].rename_from = Some(from.clone());
+            report.rows[ai].rename_to = Some(to.clone());
+            report.rows[ai].size_b = report.rows[bi].size_b;
+            report.rows[ai].checksum_b = report.rows[bi].checksum_b.clone();
+            // Mark the partner row for removal by setting its status to a sentinel and dropping later.
+            report.rows[bi].status = FileStatus::Renamed;
+            report.rows[bi].rename_from = Some(from);
+            report.rows[bi].rename_to = Some(to);
+        }
+    }
+    // Drop the duplicate (b-side) Renamed rows: we keep the first occurrence per (from,to) pair.
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+    report.rows.retain(|row| {
+        if row.status == FileStatus::Renamed {
+            if let (Some(f), Some(t)) = (row.rename_from.as_ref(), row.rename_to.as_ref()) {
+                let key = (f.clone(), t.clone());
+                if seen.contains(&key) {
+                    return false;
+                }
+                seen.insert(key);
+            }
+        }
+        true
+    });
 }
 
 pub fn compare_folders(
@@ -498,31 +707,50 @@ pub fn compare_folders(
         mode,
         ignore_hidden_system,
         ignore_patterns,
+        CompareTolerance::default(),
+        false,
+        false,
         &mut callbacks,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn compare_folders_with_progress(
     a: &Path,
     b: &Path,
     mode: CompareMode,
     ignore_hidden_system: bool,
     ignore_patterns: Vec<String>,
+    tolerance: CompareTolerance,
+    follow_symlinks: bool,
+    detect_renames_pass: bool,
     callbacks: &mut ProgressCallbacks<'_>,
 ) -> Result<CompareReport> {
     callbacks.check_canceled()?;
-    let checksum = mode == CompareMode::PathSizeChecksum;
+    let checksum = matches!(
+        mode,
+        CompareMode::PathSizeChecksum | CompareMode::PerceptualHash
+    );
+    let probe_media = matches!(
+        mode,
+        CompareMode::MediaMetadata | CompareMode::PerceptualHash
+    );
     let options = ScanOptions {
         ignore_hidden_system,
         ignore_patterns,
         checksum,
+        probe_media,
+        follow_symlinks,
     };
 
     let left = scan_folder_with_progress(a, &options, ProgressStage::ScanningA, callbacks)?;
     callbacks.check_canceled()?;
     let right = scan_folder_with_progress(b, &options, ProgressStage::ScanningB, callbacks)?;
     callbacks.check_canceled()?;
-    let report = compare_scans_with_progress(&left, &right, mode, callbacks)?;
+    let mut report = compare_scans_with_progress(&left, &right, mode, tolerance, callbacks)?;
+    if detect_renames_pass {
+        detect_renames(&mut report, &left, &right, tolerance);
+    }
     emit_progress(
         callbacks,
         ProgressStage::Complete,
