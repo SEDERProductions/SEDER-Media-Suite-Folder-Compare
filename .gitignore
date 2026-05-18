@@ -3,6 +3,7 @@
 
 # CMake / Qt
 /build/
+/qt/build/
 /cmake-build-*/
 CMakeFiles/
 CMakeCache.txt

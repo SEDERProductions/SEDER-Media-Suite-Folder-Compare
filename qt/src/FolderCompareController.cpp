@@ -4,10 +4,14 @@
 #include "FolderCompareUtils.h"
 
 #include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QProcess>
 #include <QSettings>
 #include <QStyleHints>
 #include <QThread>
@@ -54,6 +58,9 @@ FolderCompareController::FolderCompareController(QObject* parent)
         settings.value(QStringLiteral("ignorePatterns"), QString::fromUtf8(defaultPatterns))
             .toString();
     m_ignoreHiddenSystem = settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool();
+    m_followSymlinks = settings.value(QStringLiteral("followSymlinks"), false).toBool();
+    m_detectRenames = settings.value(QStringLiteral("detectRenames"), false).toBool();
+    loadRecentFolders();
     m_filterModel.setSourceModel(&m_tableModel);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
@@ -161,19 +168,122 @@ QString FolderCompareController::totalSizeText() const {
 }
 
 void FolderCompareController::setFolderA(const QString& folder) {
-    assignPropertyIfChanged(m_folderA, folder, &FolderCompareController::folderAChanged, this);
+    if (assignPropertyIfChanged(m_folderA, folder, &FolderCompareController::folderAChanged,
+                                this)) {
+        if (!folder.isEmpty()) {
+            rememberFolder(m_recentFoldersA, folder, QStringLiteral("recentFoldersA"));
+        }
+    }
 }
 
 void FolderCompareController::setFolderB(const QString& folder) {
-    assignPropertyIfChanged(m_folderB, folder, &FolderCompareController::folderBChanged, this);
+    if (assignPropertyIfChanged(m_folderB, folder, &FolderCompareController::folderBChanged,
+                                this)) {
+        if (!folder.isEmpty()) {
+            rememberFolder(m_recentFoldersB, folder, QStringLiteral("recentFoldersB"));
+        }
+    }
 }
 
 void FolderCompareController::setMode(int mode) {
-    if (mode < 0 || mode > 2) {
+    // Modes 0..4 are valid: PathSize, PathSize+Modified, PathSize+Checksum,
+    // MediaMetadata, PerceptualHash.
+    if (mode < 0 || mode > 4) {
         addLog(QStringLiteral("Invalid compare mode ignored: %1").arg(mode));
         return;
     }
     assignPropertyIfChanged(m_mode, mode, &FolderCompareController::modeChanged, this);
+}
+
+bool FolderCompareController::followSymlinks() const { return m_followSymlinks; }
+bool FolderCompareController::detectRenames() const { return m_detectRenames; }
+int FolderCompareController::renamedCount() const { return m_renamedCount; }
+QStringList FolderCompareController::recentFoldersA() const { return m_recentFoldersA; }
+QStringList FolderCompareController::recentFoldersB() const { return m_recentFoldersB; }
+
+void FolderCompareController::setFollowSymlinks(bool follow) {
+    assignAndPersistPropertyIfChanged(m_followSymlinks, follow,
+                                      QStringLiteral("followSymlinks"),
+                                      &FolderCompareController::followSymlinksChanged, this);
+}
+
+void FolderCompareController::setDetectRenames(bool detect) {
+    assignAndPersistPropertyIfChanged(m_detectRenames, detect, QStringLiteral("detectRenames"),
+                                      &FolderCompareController::detectRenamesChanged, this);
+}
+
+QString FolderCompareController::etaText() const {
+    if (m_etaSamples.size() < 2 || m_lastBytesTotal == 0 ||
+        m_lastBytesDone >= m_lastBytesTotal) {
+        return {};
+    }
+    const auto& first = m_etaSamples.first();
+    const auto& last = m_etaSamples.last();
+    const qint64 dtMs = last.timestampMs - first.timestampMs;
+    if (dtMs <= 0) {
+        return {};
+    }
+    const qulonglong dBytes = last.bytesDone - first.bytesDone;
+    if (dBytes == 0) {
+        return {};
+    }
+    const double bytesPerSec = static_cast<double>(dBytes) * 1000.0 / static_cast<double>(dtMs);
+    const double remaining = static_cast<double>(m_lastBytesTotal - m_lastBytesDone);
+    const int secs = static_cast<int>(remaining / bytesPerSec);
+    if (secs >= 3600) {
+        return QStringLiteral("ETA %1h %2m").arg(secs / 3600).arg((secs % 3600) / 60);
+    }
+    if (secs >= 60) {
+        return QStringLiteral("ETA %1m %2s").arg(secs / 60).arg(secs % 60);
+    }
+    return QStringLiteral("ETA %1s").arg(secs);
+}
+
+void FolderCompareController::useRecentFolderA(const QString& path) {
+    if (!path.isEmpty()) {
+        setFolderA(path);
+    }
+}
+
+void FolderCompareController::useRecentFolderB(const QString& path) {
+    if (!path.isEmpty()) {
+        setFolderB(path);
+    }
+}
+
+void FolderCompareController::clearRecentFolders() {
+    m_recentFoldersA.clear();
+    m_recentFoldersB.clear();
+    QSettings settings;
+    settings.remove(QStringLiteral("recentFoldersA"));
+    settings.remove(QStringLiteral("recentFoldersB"));
+    emit recentFoldersChanged();
+}
+
+void FolderCompareController::loadRecentFolders() {
+    QSettings settings;
+    m_recentFoldersA = settings.value(QStringLiteral("recentFoldersA")).toStringList();
+    m_recentFoldersB = settings.value(QStringLiteral("recentFoldersB")).toStringList();
+    auto prune = [](QStringList& list) {
+        list.erase(std::remove_if(list.begin(), list.end(),
+                                  [](const QString& path) {
+                                      return path.isEmpty() || !QFileInfo(path).exists();
+                                  }),
+                   list.end());
+    };
+    prune(m_recentFoldersA);
+    prune(m_recentFoldersB);
+}
+
+void FolderCompareController::rememberFolder(QStringList& list, const QString& path,
+                                             const QString& key) {
+    list.removeAll(path);
+    list.prepend(path);
+    while (list.size() > m_maxRecent) {
+        list.removeLast();
+    }
+    QSettings().setValue(key, list);
+    emit recentFoldersChanged();
 }
 
 void FolderCompareController::setIgnoreHiddenSystem(bool ignore) {
@@ -237,8 +347,11 @@ void FolderCompareController::startComparison() {
     resetSummary();
 
     auto* thread = new QThread(this);
+    CompareOptions options;
+    options.followSymlinks = m_followSymlinks;
+    options.detectRenames = m_detectRenames;
     auto* worker = new FolderCompareWorker(m_folderA, m_folderB, m_mode, m_ignoreHiddenSystem,
-                                           m_ignorePatterns);
+                                           m_ignorePatterns, options);
     worker->moveToThread(thread);
     m_thread = thread;
     m_worker = worker;
@@ -366,6 +479,23 @@ void FolderCompareController::handleProgress(SfcProgressStage stage, qulonglong 
                                              qulonglong total, const QString& path) {
     m_progressCurrent = current;
     m_progressTotal = total;
+
+    // ETA tracking (Bucket C2). On Transferring stages where current/total are byte
+    // counts, append to the rolling sample window and prune anything older than 5s.
+    if (stage == SFC_PROGRESS_TRANSFERRING && total > 0) {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        m_etaSamples.append({now, current});
+        const qint64 cutoff = now - 5000;
+        while (m_etaSamples.size() > 1 && m_etaSamples.first().timestampMs < cutoff) {
+            m_etaSamples.removeFirst();
+        }
+        m_lastBytesDone = current;
+        m_lastBytesTotal = total;
+    } else if (isTerminalStage(stage)) {
+        m_etaSamples.clear();
+        m_lastBytesDone = 0;
+        m_lastBytesTotal = 0;
+    }
     emit progressChanged();
 
     const QString label = progressLabel(stage, current, total, path);
@@ -476,6 +606,7 @@ void FolderCompareController::resetSummary() {
     m_onlyACount = 0;
     m_onlyBCount = 0;
     m_folderDiffCount = 0;
+    m_renamedCount = 0;
     m_totalSizeText = formatBytes(0);
     emit summaryChanged();
 }
@@ -487,6 +618,16 @@ void FolderCompareController::loadSummary(const SfcReport* report) {
     m_onlyBCount = static_cast<int>(sfc_report_only_b_count(report));
     m_folderDiffCount = static_cast<int>(sfc_report_folder_diff_count(report));
     m_totalSizeText = formatBytes(sfc_report_total_size(report));
+    // Sum FFI status code 4 (Renamed) by walking the rows. The FFI does not
+    // expose a dedicated count getter for renames yet.
+    int renamed = 0;
+    const size_t n = sfc_report_row_count(report);
+    for (size_t i = 0; i < n; ++i) {
+        if (sfc_report_row_status(report, i) == SFC_STATUS_RENAMED) {
+            ++renamed;
+        }
+    }
+    m_renamedCount = renamed;
     emit summaryChanged();
 }
 
@@ -1038,4 +1179,38 @@ QVariantList FolderCompareController::buildComparisonTree() const {
     QVariantList result;
     collect(root, result);
     return result;
+}
+
+void FolderCompareController::revealInFileManager(const QString& path) const {
+    if (path.isEmpty()) {
+        return;
+    }
+    const QFileInfo info(path);
+    if (!info.exists()) {
+        return;
+    }
+#if defined(Q_OS_MACOS)
+    QProcess::execute(QStringLiteral("/usr/bin/open"),
+                      {QStringLiteral("-R"), info.absoluteFilePath()});
+#elif defined(Q_OS_WIN)
+    QProcess::startDetached(QStringLiteral("explorer.exe"),
+                            {QStringLiteral("/select,"), QDir::toNativeSeparators(info.absoluteFilePath())});
+#else
+    // Linux: most file managers don't have a portable "select" flag; open the parent.
+    const QString parent = info.absolutePath();
+    QDesktopServices::openUrl(QUrl::fromLocalFile(parent));
+#endif
+}
+
+void FolderCompareController::openFile(const QString& path) const {
+    if (path.isEmpty()) {
+        return;
+    }
+    QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
+
+void FolderCompareController::copyToClipboard(const QString& text) const {
+    if (auto* clipboard = QApplication::clipboard()) {
+        clipboard->setText(text);
+    }
 }

@@ -179,7 +179,13 @@ ApplicationWindow {
                     ComboBox {
                         id: modeCombo
                         Layout.fillWidth: true
-                        model: ["Path + size", "Path + size + modified time", "Path + size + checksum"]
+                        model: [
+                            qsTr("Path + size"),
+                            qsTr("Path + size + modified time"),
+                            qsTr("Path + size + checksum"),
+                            qsTr("Media metadata (dimensions / duration / codec)"),
+                            qsTr("Perceptual hash (similar images)")
+                        ]
                         currentIndex: folderController.mode
                         enabled: !folderController.busy
                         onActivated: folderController.mode = currentIndex
@@ -245,7 +251,7 @@ ApplicationWindow {
 
                     CheckBox {
                         id: hiddenCheck
-                        text: "Ignore hidden/system files"
+                        text: qsTr("Ignore hidden/system files")
                         checked: folderController.ignoreHiddenSystem
                         enabled: !folderController.busy
                         onToggled: folderController.ignoreHiddenSystem = checked
@@ -270,6 +276,74 @@ ApplicationWindow {
 
                             Text {
                                 visible: hiddenCheck.checked
+                                anchors.centerIn: parent
+                                text: "\u2713"
+                                color: "#fff"
+                                font.pixelSize: 12
+                            }
+                        }
+                    }
+
+                    CheckBox {
+                        id: followSymlinksCheck
+                        text: qsTr("Follow symlinks")
+                        checked: folderController.followSymlinks
+                        enabled: !folderController.busy
+                        onToggled: folderController.followSymlinks = checked
+
+                        contentItem: Text {
+                            text: followSymlinksCheck.text
+                            color: colors.text
+                            font.pixelSize: 13
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: followSymlinksCheck.indicator.width + followSymlinksCheck.spacing
+                        }
+
+                        indicator: Rectangle {
+                            implicitWidth: 18
+                            implicitHeight: 18
+                            x: followSymlinksCheck.leftPadding
+                            y: parent.height / 2 - height / 2
+                            radius: 3
+                            color: followSymlinksCheck.checked ? colors.accent : colors.panelAlt
+                            border.color: colors.line
+                            border.width: 1
+                            Text {
+                                visible: followSymlinksCheck.checked
+                                anchors.centerIn: parent
+                                text: "\u2713"
+                                color: "#fff"
+                                font.pixelSize: 12
+                            }
+                        }
+                    }
+
+                    CheckBox {
+                        id: detectRenamesCheck
+                        text: qsTr("Detect renames")
+                        checked: folderController.detectRenames
+                        enabled: !folderController.busy
+                        onToggled: folderController.detectRenames = checked
+
+                        contentItem: Text {
+                            text: detectRenamesCheck.text
+                            color: colors.text
+                            font.pixelSize: 13
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: detectRenamesCheck.indicator.width + detectRenamesCheck.spacing
+                        }
+
+                        indicator: Rectangle {
+                            implicitWidth: 18
+                            implicitHeight: 18
+                            x: detectRenamesCheck.leftPadding
+                            y: parent.height / 2 - height / 2
+                            radius: 3
+                            color: detectRenamesCheck.checked ? colors.accent : colors.panelAlt
+                            border.color: colors.line
+                            border.width: 1
+                            Text {
+                                visible: detectRenamesCheck.checked
                                 anchors.centerIn: parent
                                 text: "\u2713"
                                 color: "#fff"
@@ -444,21 +518,34 @@ ApplicationWindow {
                         MetricBox { label: "Scanned"; value: folderController.totalSizeText; accent: colors.faint }
                     }
 
-                    ProgressBar {
+                    RowLayout {
                         Layout.fillWidth: true
                         visible: folderController.busy
-                        from: 0
-                        to: folderController.progressTotal > 0 ? folderController.progressTotal : 100
-                        value: folderController.progressTotal > 0 ? folderController.progressCurrent : 0
-                        background: Rectangle {
-                            radius: 3
-                            color: colors.panelAlt
-                            border.color: colors.line
-                            border.width: 1
+                        spacing: 8
+
+                        ProgressBar {
+                            Layout.fillWidth: true
+                            from: 0
+                            to: folderController.progressTotal > 0 ? folderController.progressTotal : 100
+                            value: folderController.progressTotal > 0 ? folderController.progressCurrent : 0
+                            background: Rectangle {
+                                radius: 3
+                                color: colors.panelAlt
+                                border.color: colors.line
+                                border.width: 1
+                            }
+                            contentItem: Rectangle {
+                                radius: 3
+                                color: colors.accent
+                            }
                         }
-                        contentItem: Rectangle {
-                            radius: 3
-                            color: colors.accent
+
+                        Text {
+                            text: folderController.etaText
+                            visible: folderController.etaText.length > 0
+                            color: colors.faint
+                            font.pixelSize: 12
+                            font.family: window.monoFont
                         }
                     }
 
@@ -787,6 +874,10 @@ ApplicationWindow {
                                             treeModel.toggleExpanded(node.relPath)
                                         }
                                         if (mouse.button === Qt.RightButton) {
+                                            contextMenu.targetRelPath = node.relPath
+                                            contextMenu.targetIsFolder = node.isFolder
+                                            contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4
+                                            contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4
                                             contextMenu.popup()
                                         }
                                     }
@@ -943,28 +1034,78 @@ ApplicationWindow {
 
     Menu {
         id: contextMenu
-        title: "Actions"
+        title: qsTr("Actions")
+
+        property string targetRelPath: ""
+        property bool targetIsFolder: false
+        property bool targetHasA: false
+        property bool targetHasB: false
+
+        function pathA() {
+            if (!targetRelPath || !folderController.folderA) return "";
+            return folderController.folderA + "/" + targetRelPath;
+        }
+        function pathB() {
+            if (!targetRelPath || !folderController.folderB) return "";
+            return folderController.folderB + "/" + targetRelPath;
+        }
 
         MenuItem {
-            text: "\u25C0 Copy to A"
+            text: "\u25C0 " + qsTr("Copy to A")
             enabled: folderController.canCopyToA
             onTriggered: folderController.copySelectedToA()
         }
         MenuItem {
-            text: "Copy to B \u25B6"
+            text: qsTr("Copy to B") + " \u25B6"
             enabled: folderController.canCopyToB
             onTriggered: folderController.copySelectedToB()
         }
         MenuSeparator {}
         MenuItem {
-            text: "\u25C0 Move to A"
+            text: "\u25C0 " + qsTr("Move to A")
             enabled: folderController.canMoveToA
             onTriggered: folderController.moveSelectedToA()
         }
         MenuItem {
-            text: "Move to B \u25B6"
+            text: qsTr("Move to B") + " \u25B6"
             enabled: folderController.canMoveToB
             onTriggered: folderController.moveSelectedToB()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Open file (A side)")
+            enabled: contextMenu.targetHasA && !contextMenu.targetIsFolder
+            onTriggered: folderController.openFile(contextMenu.pathA())
+        }
+        MenuItem {
+            text: qsTr("Open file (B side)")
+            enabled: contextMenu.targetHasB && !contextMenu.targetIsFolder
+            onTriggered: folderController.openFile(contextMenu.pathB())
+        }
+        MenuItem {
+            text: qsTr("Reveal in file manager (A)")
+            enabled: contextMenu.targetHasA
+            onTriggered: folderController.revealInFileManager(contextMenu.pathA())
+        }
+        MenuItem {
+            text: qsTr("Reveal in file manager (B)")
+            enabled: contextMenu.targetHasB
+            onTriggered: folderController.revealInFileManager(contextMenu.pathB())
+        }
+        MenuItem {
+            text: qsTr("Copy relative path")
+            enabled: contextMenu.targetRelPath.length > 0
+            onTriggered: folderController.copyToClipboard(contextMenu.targetRelPath)
+        }
+        MenuItem {
+            text: qsTr("Copy path (A)")
+            enabled: contextMenu.targetHasA
+            onTriggered: folderController.copyToClipboard(contextMenu.pathA())
+        }
+        MenuItem {
+            text: qsTr("Copy path (B)")
+            enabled: contextMenu.targetHasB
+            onTriggered: folderController.copyToClipboard(contextMenu.pathB())
         }
     }
 

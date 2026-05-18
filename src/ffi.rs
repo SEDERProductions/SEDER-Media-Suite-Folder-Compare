@@ -826,3 +826,410 @@ pub unsafe extern "C" fn sfc_remove_folder(
         }
     }
 }
+
+// ── Sync FFI ──────────────────────────────────────────────────────────────
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // Variants constructed by C callers
+pub enum SfcSyncMode {
+    MirrorAToB = 0,
+    MirrorBToA = 1,
+    TwoWayNewerWins = 2,
+    TwoWayManual = 3,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // Variants constructed by C callers
+pub enum SfcConflictStrategy {
+    NewerWins = 0,
+    LargerWins = 1,
+    AskUser = 2,
+    Skip = 3,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum SfcSyncActionKind {
+    Copy = 0,
+    Delete = 1,
+    Rename = 2,
+    Skip = 3,
+}
+
+pub struct FfiSyncPlan {
+    plan: crate::sync::SyncPlan,
+    sources: Vec<CString>,
+    dests: Vec<CString>,
+    paths: Vec<CString>,
+    reasons: Vec<CString>,
+}
+
+fn sync_mode_from_ffi(mode: SfcSyncMode) -> crate::sync::SyncMode {
+    match mode {
+        SfcSyncMode::MirrorAToB => crate::sync::SyncMode::MirrorAToB,
+        SfcSyncMode::MirrorBToA => crate::sync::SyncMode::MirrorBToA,
+        SfcSyncMode::TwoWayNewerWins => crate::sync::SyncMode::TwoWayNewerWins,
+        SfcSyncMode::TwoWayManual => crate::sync::SyncMode::TwoWayManual,
+    }
+}
+
+fn conflict_from_ffi(c: SfcConflictStrategy) -> crate::sync::ConflictStrategy {
+    match c {
+        SfcConflictStrategy::NewerWins => crate::sync::ConflictStrategy::NewerWins,
+        SfcConflictStrategy::LargerWins => crate::sync::ConflictStrategy::LargerWins,
+        SfcConflictStrategy::AskUser => crate::sync::ConflictStrategy::AskUser,
+        SfcConflictStrategy::Skip => crate::sync::ConflictStrategy::Skip,
+    }
+}
+
+fn action_kind_to_ffi(k: crate::sync::SyncActionKind) -> SfcSyncActionKind {
+    match k {
+        crate::sync::SyncActionKind::Copy => SfcSyncActionKind::Copy,
+        crate::sync::SyncActionKind::Delete => SfcSyncActionKind::Delete,
+        crate::sync::SyncActionKind::Rename => SfcSyncActionKind::Rename,
+        crate::sync::SyncActionKind::Skip => SfcSyncActionKind::Skip,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_build_plan(
+    report: *const FfiReport,
+    folder_a: *const c_char,
+    folder_b: *const c_char,
+    mode: SfcSyncMode,
+    propagate_deletes: bool,
+    conflict: SfcConflictStrategy,
+    error_out: *mut *mut c_char,
+) -> *mut FfiSyncPlan {
+    let report = match unsafe { report_ref(report) } {
+        Some(r) => r,
+        None => {
+            unsafe {
+                set_error(error_out, "Report is required");
+            }
+            return ptr::null_mut();
+        }
+    };
+    let folder_a_s = match unsafe { cstr_to_string(folder_a, "Folder A") } {
+        Ok(v) => v,
+        Err(e) => {
+            unsafe {
+                set_error(error_out, e.to_string());
+            }
+            return ptr::null_mut();
+        }
+    };
+    let folder_b_s = match unsafe { cstr_to_string(folder_b, "Folder B") } {
+        Ok(v) => v,
+        Err(e) => {
+            unsafe {
+                set_error(error_out, e.to_string());
+            }
+            return ptr::null_mut();
+        }
+    };
+    let options = crate::sync::SyncOptions {
+        propagate_deletes,
+        dry_run: false,
+        conflict_strategy: conflict_from_ffi(conflict),
+    };
+    let plan = crate::sync::build_plan(
+        &report.report,
+        Path::new(&folder_a_s),
+        Path::new(&folder_b_s),
+        sync_mode_from_ffi(mode),
+        &options,
+    );
+    let sources = plan
+        .actions
+        .iter()
+        .map(|a| sanitized_cstring(&a.source.to_string_lossy()))
+        .collect();
+    let dests = plan
+        .actions
+        .iter()
+        .map(|a| sanitized_cstring(&a.dest.to_string_lossy()))
+        .collect();
+    let paths = plan
+        .actions
+        .iter()
+        .map(|a| sanitized_cstring(&a.relative_path))
+        .collect();
+    let reasons = plan
+        .actions
+        .iter()
+        .map(|a| sanitized_cstring(&a.reason))
+        .collect();
+    Box::into_raw(Box::new(FfiSyncPlan {
+        plan,
+        sources,
+        dests,
+        paths,
+        reasons,
+    }))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_free(plan: *mut FfiSyncPlan) {
+    if !plan.is_null() {
+        drop(unsafe { Box::from_raw(plan) });
+    }
+}
+
+unsafe fn plan_ref<'a>(plan: *const FfiSyncPlan) -> Option<&'a FfiSyncPlan> {
+    unsafe { plan.as_ref() }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_len(plan: *const FfiSyncPlan) -> usize {
+    unsafe { plan_ref(plan) }.map(|p| p.plan.len()).unwrap_or(0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_action_kind(
+    plan: *const FfiSyncPlan,
+    index: usize,
+) -> SfcSyncActionKind {
+    unsafe { plan_ref(plan) }
+        .and_then(|p| p.plan.actions.get(index))
+        .map(|a| action_kind_to_ffi(a.kind))
+        .unwrap_or(SfcSyncActionKind::Skip)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_action_source(
+    plan: *const FfiSyncPlan,
+    index: usize,
+) -> *const c_char {
+    unsafe { plan_ref(plan) }
+        .and_then(|p| p.sources.get(index))
+        .map(|s| s.as_ptr())
+        .unwrap_or(ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_action_dest(
+    plan: *const FfiSyncPlan,
+    index: usize,
+) -> *const c_char {
+    unsafe { plan_ref(plan) }
+        .and_then(|p| p.dests.get(index))
+        .map(|s| s.as_ptr())
+        .unwrap_or(ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_action_path(
+    plan: *const FfiSyncPlan,
+    index: usize,
+) -> *const c_char {
+    unsafe { plan_ref(plan) }
+        .and_then(|p| p.paths.get(index))
+        .map(|s| s.as_ptr())
+        .unwrap_or(ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_action_reason(
+    plan: *const FfiSyncPlan,
+    index: usize,
+) -> *const c_char {
+    unsafe { plan_ref(plan) }
+        .and_then(|p| p.reasons.get(index))
+        .map(|s| s.as_ptr())
+        .unwrap_or(ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_sync_plan_execute(
+    plan: *const FfiSyncPlan,
+    dry_run: bool,
+    progress: SfcProgressCallback,
+    cancel: SfcCancelCallback,
+    user_data: *mut c_void,
+    error_out: *mut *mut c_char,
+) -> bool {
+    let plan = match unsafe { plan_ref(plan) } {
+        Some(p) => p,
+        None => {
+            unsafe {
+                set_error(error_out, "Plan is required");
+            }
+            return false;
+        }
+    };
+    let mut progress_callback = |event: ProgressEvent| {
+        emit_ffi_progress(progress, user_data, event);
+    };
+    let cancel_callback = || cancel.map(|callback| callback(user_data)).unwrap_or(false);
+    let mut callbacks = ProgressCallbacks {
+        progress: Some(&mut progress_callback),
+        cancel: Some(&cancel_callback),
+    };
+    let options = crate::sync::SyncOptions {
+        propagate_deletes: true,
+        dry_run,
+        conflict_strategy: crate::sync::ConflictStrategy::NewerWins,
+    };
+    match crate::sync::execute_plan(&plan.plan, &options, &mut callbacks) {
+        Ok(()) => true,
+        Err(e) => {
+            unsafe {
+                set_error(error_out, e.to_string());
+            }
+            false
+        }
+    }
+}
+
+// ── Text & hex diff FFI ───────────────────────────────────────────────────
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum SfcDiffLineKind {
+    Equal = 0,
+    Insert = 1,
+    Delete = 2,
+}
+
+pub struct FfiTextDiff {
+    lines: Vec<crate::diff::DiffLine>,
+    texts: Vec<CString>,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_diff_text(
+    path_a: *const c_char,
+    path_b: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut FfiTextDiff {
+    let path_a_s = match unsafe { cstr_to_string(path_a, "Path A") } {
+        Ok(v) => v,
+        Err(e) => {
+            unsafe {
+                set_error(error_out, e.to_string());
+            }
+            return ptr::null_mut();
+        }
+    };
+    let path_b_s = match unsafe { cstr_to_string(path_b, "Path B") } {
+        Ok(v) => v,
+        Err(e) => {
+            unsafe {
+                set_error(error_out, e.to_string());
+            }
+            return ptr::null_mut();
+        }
+    };
+    match crate::diff::diff_text(Path::new(&path_a_s), Path::new(&path_b_s)) {
+        Ok(lines) => {
+            let texts = lines.iter().map(|l| sanitized_cstring(&l.text)).collect();
+            Box::into_raw(Box::new(FfiTextDiff { lines, texts }))
+        }
+        Err(e) => {
+            unsafe {
+                set_error(error_out, e.to_string());
+            }
+            ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_text_diff_free(diff: *mut FfiTextDiff) {
+    if !diff.is_null() {
+        drop(unsafe { Box::from_raw(diff) });
+    }
+}
+
+unsafe fn diff_ref<'a>(diff: *const FfiTextDiff) -> Option<&'a FfiTextDiff> {
+    unsafe { diff.as_ref() }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_text_diff_len(diff: *const FfiTextDiff) -> usize {
+    unsafe { diff_ref(diff) }
+        .map(|d| d.lines.len())
+        .unwrap_or(0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_text_diff_kind(
+    diff: *const FfiTextDiff,
+    index: usize,
+) -> SfcDiffLineKind {
+    unsafe { diff_ref(diff) }
+        .and_then(|d| d.lines.get(index))
+        .map(|line| match line.kind {
+            crate::diff::LineKind::Equal => SfcDiffLineKind::Equal,
+            crate::diff::LineKind::Insert => SfcDiffLineKind::Insert,
+            crate::diff::LineKind::Delete => SfcDiffLineKind::Delete,
+        })
+        .unwrap_or(SfcDiffLineKind::Equal)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_text_diff_line_a(diff: *const FfiTextDiff, index: usize) -> u32 {
+    unsafe { diff_ref(diff) }
+        .and_then(|d| d.lines.get(index))
+        .and_then(|l| l.line_a)
+        .unwrap_or(0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_text_diff_line_b(diff: *const FfiTextDiff, index: usize) -> u32 {
+    unsafe { diff_ref(diff) }
+        .and_then(|d| d.lines.get(index))
+        .and_then(|l| l.line_b)
+        .unwrap_or(0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_text_diff_text(
+    diff: *const FfiTextDiff,
+    index: usize,
+) -> *const c_char {
+    unsafe { diff_ref(diff) }
+        .and_then(|d| d.texts.get(index))
+        .map(|t| t.as_ptr())
+        .unwrap_or(ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sfc_is_text_file(path: *const c_char) -> bool {
+    let s = match unsafe { cstr_to_string(path, "Path") } {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    crate::diff::is_text_file(Path::new(&s))
+}
+
+/// Read up to `length` bytes from `path` starting at `offset` into `out`.
+/// Returns the number of bytes written, or 0 on error.
+#[no_mangle]
+pub unsafe extern "C" fn sfc_hex_window(
+    path: *const c_char,
+    offset: u64,
+    out: *mut u8,
+    length: usize,
+) -> usize {
+    if out.is_null() {
+        return 0;
+    }
+    let s = match unsafe { cstr_to_string(path, "Path") } {
+        Ok(v) => v,
+        Err(_) => return 0,
+    };
+    match crate::diff::hex_window(Path::new(&s), offset, length) {
+        Ok(bytes) => {
+            let n = bytes.len();
+            unsafe {
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, n);
+            }
+            n
+        }
+        Err(_) => 0,
+    }
+}

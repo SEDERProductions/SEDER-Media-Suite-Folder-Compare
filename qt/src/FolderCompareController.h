@@ -69,6 +69,14 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(bool transferBusy READ transferBusy NOTIFY transferBusyChanged)
     Q_PROPERTY(int transferCurrent READ transferCurrent NOTIFY transferProgressChanged)
     Q_PROPERTY(int transferTotal READ transferTotal NOTIFY transferProgressChanged)
+    Q_PROPERTY(bool followSymlinks READ followSymlinks WRITE setFollowSymlinks NOTIFY
+                   followSymlinksChanged)
+    Q_PROPERTY(bool detectRenames READ detectRenames WRITE setDetectRenames NOTIFY
+                   detectRenamesChanged)
+    Q_PROPERTY(QString etaText READ etaText NOTIFY progressChanged)
+    Q_PROPERTY(QStringList recentFoldersA READ recentFoldersA NOTIFY recentFoldersChanged)
+    Q_PROPERTY(QStringList recentFoldersB READ recentFoldersB NOTIFY recentFoldersChanged)
+    Q_PROPERTY(int renamedCount READ renamedCount NOTIFY summaryChanged)
 
   public:
     explicit FolderCompareController(QObject* parent = nullptr);
@@ -108,6 +116,12 @@ class FolderCompareController final : public QObject {
     bool transferBusy() const;
     int transferCurrent() const;
     int transferTotal() const;
+    bool followSymlinks() const;
+    bool detectRenames() const;
+    QString etaText() const;
+    QStringList recentFoldersA() const;
+    QStringList recentFoldersB() const;
+    int renamedCount() const;
 
     void setFolderA(const QString& folder);
     void setFolderB(const QString& folder);
@@ -115,6 +129,15 @@ class FolderCompareController final : public QObject {
     void setIgnoreHiddenSystem(bool ignore);
     void setIgnorePatterns(const QString& patterns);
     void setTheme(const QString& theme);
+    void setFollowSymlinks(bool follow);
+    void setDetectRenames(bool detect);
+
+    Q_INVOKABLE void useRecentFolderA(const QString& path);
+    Q_INVOKABLE void useRecentFolderB(const QString& path);
+    Q_INVOKABLE void clearRecentFolders();
+    Q_INVOKABLE void revealInFileManager(const QString& path) const;
+    Q_INVOKABLE void openFile(const QString& path) const;
+    Q_INVOKABLE void copyToClipboard(const QString& text) const;
 
     Q_INVOKABLE void chooseFolderA();
     Q_INVOKABLE void chooseFolderB();
@@ -159,6 +182,9 @@ class FolderCompareController final : public QObject {
     void transferProgressChanged();
     void overwriteNeeded(QVariantMap fileInfo);
     void transferOperationFinished(int succeeded, int failed);
+    void followSymlinksChanged();
+    void detectRenamesChanged();
+    void recentFoldersChanged();
 
   private slots:
     void handleProgress(SfcProgressStage stage, qulonglong current, qulonglong total,
@@ -240,4 +266,25 @@ class FolderCompareController final : public QObject {
     QPointer<FolderTransferWorker> m_transferWorker;
     QPointer<QThread> m_transferThread;
     static constexpr int m_maxUndo = 50;
+
+    // Bucket A/B options surfaced to the UI.
+    bool m_followSymlinks = false;
+    bool m_detectRenames = false;
+    int m_renamedCount = 0;
+
+    // Bucket C: ETA tracking. Rolling window of (epoch ms, bytes) samples.
+    struct EtaSample {
+        qint64 timestampMs;
+        qulonglong bytesDone;
+    };
+    QVector<EtaSample> m_etaSamples;
+    qulonglong m_lastBytesTotal = 0;
+    qulonglong m_lastBytesDone = 0;
+
+    // Bucket D2: recent folders, persisted via QSettings.
+    QStringList m_recentFoldersA;
+    QStringList m_recentFoldersB;
+    static constexpr int m_maxRecent = 10;
+    void loadRecentFolders();
+    void rememberFolder(QStringList& list, const QString& path, const QString& key);
 };

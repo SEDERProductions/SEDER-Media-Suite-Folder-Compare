@@ -7,9 +7,10 @@
 
 FolderCompareWorker::FolderCompareWorker(QString folderA, QString folderB, int mode,
                                          bool ignoreHiddenSystem, QString ignorePatterns,
-                                         QObject* parent)
+                                         CompareOptions options, QObject* parent)
     : QObject(parent), m_folderA(std::move(folderA)), m_folderB(std::move(folderB)), m_mode(mode),
-      m_ignoreHiddenSystem(ignoreHiddenSystem), m_ignorePatterns(std::move(ignorePatterns)) {}
+      m_ignoreHiddenSystem(ignoreHiddenSystem), m_ignorePatterns(std::move(ignorePatterns)),
+      m_options(options) {}
 
 bool FolderCompareWorker::isCanceled() const {
     return m_canceled.load(std::memory_order_acquire);
@@ -29,6 +30,11 @@ void FolderCompareWorker::run() {
     request.progress = &FolderCompareWorker::progressCallback;
     request.cancel = &FolderCompareWorker::cancelCallback;
     request.user_data = this;
+    request.tolerance_mtime_secs = m_options.toleranceMtimeSecs;
+    request.tolerance_duration_ms = m_options.toleranceDurationMs;
+    request.tolerance_phash_hamming = m_options.tolerancePhashHamming;
+    request.follow_symlinks = m_options.followSymlinks;
+    request.detect_renames = m_options.detectRenames;
 
     char* error = nullptr;
     SfcReport* report = sfc_compare_folders(&request, &error);
@@ -62,7 +68,7 @@ bool FolderCompareWorker::cancelCallback(void* userData) {
 SfcCompareMode FolderCompareWorker::modeFromUiValue(int mode) {
     // Rust FFI enum values are the source of truth for compare semantics.
     if (mode < static_cast<int>(SFC_COMPARE_PATH_SIZE) ||
-        mode > static_cast<int>(SFC_COMPARE_PATH_SIZE_CHECKSUM)) {
+        mode > static_cast<int>(SFC_COMPARE_PERCEPTUAL_HASH)) {
         return SFC_COMPARE_PATH_SIZE;
     }
     return static_cast<SfcCompareMode>(mode);
