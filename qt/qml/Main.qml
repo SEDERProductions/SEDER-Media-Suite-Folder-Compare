@@ -150,16 +150,20 @@ ApplicationWindow {
                     }
 
                     FolderPicker {
-                        label: "Folder A"
+                        label: qsTr("Folder A")
                         path: folderController.folderA
                         pickAction: function() { folderController.chooseFolderA() }
                         onDroppedFolder: function(folder) { folderController.folderA = folder }
+                        recentList: folderController.recentFoldersA
+                        useRecent: function(folder) { folderController.useRecentFolderA(folder) }
                     }
                     FolderPicker {
-                        label: "Folder B"
+                        label: qsTr("Folder B")
                         path: folderController.folderB
                         pickAction: function() { folderController.chooseFolderB() }
                         onDroppedFolder: function(folder) { folderController.folderB = folder }
+                        recentList: folderController.recentFoldersB
+                        useRecent: function(folder) { folderController.useRecentFolderB(folder) }
                     }
 
                     Label {
@@ -167,6 +171,90 @@ ApplicationWindow {
                         color: colors.muted
                         font.pixelSize: 11
                         font.family: window.monoFont
+                    }
+
+                    // ── Profiles ──────────────────────────────────────────────
+                    Label {
+                        text: qsTr("PROFILES")
+                        color: colors.muted
+                        font.pixelSize: 12
+                        font.family: window.monoFont
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        ComboBox {
+                            id: profileCombo
+                            Layout.fillWidth: true
+                            model: folderController.listProfiles()
+                            enabled: !folderController.busy && model.length > 0
+                            displayText: model.length > 0 ? (currentText || qsTr("Select…")) : qsTr("(none saved)")
+                            Accessible.name: qsTr("Saved profile")
+
+                            background: Rectangle {
+                                radius: 5
+                                color: colors.panelAlt
+                                border.color: colors.line
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: profileCombo.displayText
+                                color: colors.text
+                                font.pixelSize: 12
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 8
+                            }
+                            onActivated: function() {
+                                if (currentText.length > 0) {
+                                    folderController.loadProfile(currentText)
+                                }
+                            }
+                        }
+
+                        Button {
+                            text: qsTr("Save…")
+                            enabled: !folderController.busy
+                            Accessible.name: qsTr("Save current settings as a profile")
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.down ? colors.accentDark : colors.panelAlt
+                                border.color: colors.line
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: colors.text
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                            }
+                            onClicked: profileSaveDialog.open()
+                        }
+
+                        Button {
+                            text: "✕"
+                            enabled: !folderController.busy && profileCombo.currentText.length > 0
+                            Accessible.name: qsTr("Delete profile")
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.down ? colors.accentDark : colors.panelAlt
+                                border.color: colors.line
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.enabled ? colors.text : colors.faint
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                            }
+                            onClicked: {
+                                folderController.deleteProfile(profileCombo.currentText)
+                                profileCombo.model = folderController.listProfiles()
+                            }
+                        }
                     }
 
                     Label {
@@ -179,6 +267,7 @@ ApplicationWindow {
                     ComboBox {
                         id: modeCombo
                         Layout.fillWidth: true
+                        Accessible.name: qsTr("Comparison mode")
                         model: [
                             qsTr("Path + size"),
                             qsTr("Path + size + modified time"),
@@ -416,7 +505,8 @@ ApplicationWindow {
                         spacing: 8
                         Button {
                             Layout.fillWidth: true
-                            text: folderController.busy ? "Cancel Comparison (Esc)" : "Start Comparison (" + window.hintText(window.startShortcut) + ")"
+                            text: folderController.busy ? qsTr("Cancel Comparison (Esc)") : qsTr("Start Comparison") + " (" + window.hintText(window.startShortcut) + ")"
+                            Accessible.name: folderController.busy ? qsTr("Cancel the running comparison") : qsTr("Start a new comparison")
                             onClicked: folderController.busy ? folderController.cancelComparison() : folderController.startComparison()
                             background: Rectangle {
                                 radius: 5
@@ -481,6 +571,31 @@ ApplicationWindow {
                             ToolTip.visible: hovered && !enabled
                             ToolTip.text: "Run a comparison first"
                         }
+                    }
+
+                    Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Sync planner…")
+                        enabled: folderController.hasReport && !folderController.busy
+                        Accessible.name: qsTr("Open the sync planner")
+                        onClicked: {
+                            syncDialog.rebuild()
+                            syncDialog.open()
+                        }
+                        background: Rectangle {
+                            radius: 5
+                            color: parent.enabled ? colors.panelAlt : colors.bg
+                            border.color: parent.enabled ? colors.line : colors.bg
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            color: parent.enabled ? colors.text : colors.faint
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        ToolTip.visible: hovered && !enabled
+                        ToolTip.text: qsTr("Run a comparison first")
                     }
 
                     Item { Layout.preferredHeight: 8 }
@@ -558,6 +673,9 @@ ApplicationWindow {
                                 required property int index
                                 Layout.fillWidth: true
                                 text: filterLabel(index) + (filterCount(index) > 0 ? " (" + filterCount(index) + ")" : "")
+                                Accessible.name: qsTr("Filter: %1").arg(filterLabel(index))
+                                Accessible.checkable: true
+                                Accessible.checked: checked
                                 checkable: true
                                 checked: activeFilter === index
                                 enabled: filterCount(index) > 0 || index === 0
@@ -1107,6 +1225,306 @@ ApplicationWindow {
             enabled: contextMenu.targetHasB
             onTriggered: folderController.copyToClipboard(contextMenu.pathB())
         }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Diff content (A vs B)")
+            enabled: contextMenu.targetHasA && contextMenu.targetHasB && !contextMenu.targetIsFolder
+            onTriggered: contentDiffDialog.open2(contextMenu.pathA(), contextMenu.pathB())
+        }
+    }
+
+    // ── Profile save dialog ───────────────────────────────────────────────
+
+    Dialog {
+        id: profileSaveDialog
+        title: qsTr("Save Profile")
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: 360
+
+        ColumnLayout {
+            spacing: 8
+            Layout.fillWidth: true
+            Label {
+                text: qsTr("Profile name")
+                color: colors.text
+            }
+            TextField {
+                id: profileNameField
+                Layout.fillWidth: true
+                placeholderText: qsTr("e.g. card-A vs backup")
+                color: colors.text
+                background: Rectangle {
+                    radius: 5
+                    color: colors.panelAlt
+                    border.color: profileNameField.focus ? colors.accent : colors.line
+                }
+            }
+        }
+
+        onAccepted: {
+            if (profileNameField.text.length > 0) {
+                folderController.saveProfile(profileNameField.text)
+                profileCombo.model = folderController.listProfiles()
+                profileCombo.currentIndex = profileCombo.find(profileNameField.text)
+                profileNameField.text = ""
+            }
+        }
+        onRejected: profileNameField.text = ""
+    }
+
+    // ── Sync planner dialog ───────────────────────────────────────────────
+
+    Dialog {
+        id: syncDialog
+        title: qsTr("Sync Planner")
+        modal: true
+        standardButtons: Dialog.Close
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width * 0.8, 720)
+        height: Math.min(parent.height * 0.8, 560)
+
+        property var planRows: []
+        property int chosenMode: 0          // SfcSyncMode
+        property bool propagateDeletes: false
+        property int conflict: 0            // SfcConflictStrategy
+        property bool dryRun: true
+
+        function rebuild() {
+            planRows = folderController.buildSyncPlan(chosenMode, propagateDeletes, conflict)
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 12
+                rowSpacing: 6
+
+                Label { text: qsTr("Mode:"); color: colors.text }
+                ComboBox {
+                    Layout.fillWidth: true
+                    model: [
+                        qsTr("Mirror A → B"),
+                        qsTr("Mirror B → A"),
+                        qsTr("Two-way (newer wins)"),
+                        qsTr("Two-way (manual)")
+                    ]
+                    currentIndex: syncDialog.chosenMode
+                    onActivated: { syncDialog.chosenMode = currentIndex; syncDialog.rebuild() }
+                }
+
+                Label { text: qsTr("Conflicts:"); color: colors.text }
+                ComboBox {
+                    Layout.fillWidth: true
+                    model: [qsTr("Newer wins"), qsTr("Larger wins"), qsTr("Ask"), qsTr("Skip")]
+                    currentIndex: syncDialog.conflict
+                    onActivated: { syncDialog.conflict = currentIndex; syncDialog.rebuild() }
+                }
+
+                CheckBox {
+                    text: qsTr("Propagate deletes")
+                    checked: syncDialog.propagateDeletes
+                    onToggled: { syncDialog.propagateDeletes = checked; syncDialog.rebuild() }
+                }
+                CheckBox {
+                    text: qsTr("Dry run (preview only, no file changes)")
+                    checked: syncDialog.dryRun
+                    onToggled: syncDialog.dryRun = checked
+                }
+            }
+
+            Label {
+                text: qsTr("Planned actions: %1").arg(syncDialog.planRows.length)
+                color: colors.muted
+                font.family: window.monoFont
+            }
+
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                model: syncDialog.planRows
+                ScrollBar.vertical: ScrollBar {}
+
+                delegate: Rectangle {
+                    required property var modelData
+                    width: ListView.view.width
+                    height: 30
+                    color: index % 2 === 0 ? colors.panel : colors.panelAlt
+
+                    Row {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        Text {
+                            width: 60
+                            verticalAlignment: Text.AlignVCenter
+                            height: parent.height
+                            text: ["Copy", "Delete", "Rename", "Skip"][modelData.kind] || ""
+                            color: modelData.kind === 1 ? colors.bad : colors.text
+                            font.family: window.monoFont
+                            font.pixelSize: 11
+                        }
+                        Text {
+                            width: parent.width - 80
+                            verticalAlignment: Text.AlignVCenter
+                            height: parent.height
+                            text: modelData.path + "  —  " + modelData.reason
+                            color: colors.text
+                            elide: Text.ElideMiddle
+                            font.family: window.monoFont
+                            font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Button {
+                    text: qsTr("Refresh plan")
+                    onClicked: syncDialog.rebuild()
+                }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: syncDialog.dryRun ? qsTr("Preview run") : qsTr("Execute")
+                    enabled: syncDialog.planRows.length > 0
+                    onClicked: folderController.executeSyncPlan(syncDialog.dryRun)
+                }
+            }
+        }
+    }
+
+    // ── Content diff dialog ───────────────────────────────────────────────
+
+    Dialog {
+        id: contentDiffDialog
+        title: qsTr("Content Diff")
+        modal: true
+        standardButtons: Dialog.Close
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width * 0.9, 900)
+        height: Math.min(parent.height * 0.85, 640)
+
+        property string pathA: ""
+        property string pathB: ""
+        property var diffLines: []
+        property bool textMode: true
+        property string hexA: ""
+        property string hexB: ""
+
+        function open2(a, b) {
+            pathA = a
+            pathB = b
+            textMode = folderController.isTextFile(a) && folderController.isTextFile(b)
+            if (textMode) {
+                diffLines = folderController.loadTextDiff(a, b)
+            } else {
+                hexA = folderController.hexWindow(a, 0, 4096)
+                hexB = folderController.hexWindow(b, 0, 4096)
+            }
+            open()
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+
+            Label {
+                text: contentDiffDialog.pathA + "  ⟷  " + contentDiffDialog.pathB
+                color: colors.muted
+                font.family: window.monoFont
+                font.pixelSize: 11
+                elide: Text.ElideMiddle
+                Layout.fillWidth: true
+            }
+
+            ListView {
+                visible: contentDiffDialog.textMode
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                model: contentDiffDialog.diffLines
+                clip: true
+                ScrollBar.vertical: ScrollBar {}
+
+                delegate: Rectangle {
+                    required property var modelData
+                    width: ListView.view.width
+                    height: 18
+                    color: modelData.kind === 1 ? "#1e4a2a"     // insert (green-ish bg)
+                           : modelData.kind === 2 ? "#4a1e1e"   // delete (red-ish bg)
+                           : "transparent"
+
+                    Row {
+                        anchors.fill: parent
+                        anchors.leftMargin: 6
+                        spacing: 8
+                        Text {
+                            width: 50
+                            text: modelData.lineA > 0 ? modelData.lineA : ""
+                            color: colors.faint
+                            font.family: window.monoFont
+                            font.pixelSize: 11
+                        }
+                        Text {
+                            width: 50
+                            text: modelData.lineB > 0 ? modelData.lineB : ""
+                            color: colors.faint
+                            font.family: window.monoFont
+                            font.pixelSize: 11
+                        }
+                        Text {
+                            width: parent.width - 130
+                            text: (modelData.kind === 1 ? "+ " : modelData.kind === 2 ? "- " : "  ") + modelData.text
+                            color: colors.text
+                            font.family: window.monoFont
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                visible: !contentDiffDialog.textMode
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 8
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    TextArea {
+                        readOnly: true
+                        text: contentDiffDialog.hexA
+                        font.family: window.monoFont
+                        font.pixelSize: 11
+                        color: colors.text
+                        background: Rectangle { color: colors.panelAlt }
+                    }
+                }
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    TextArea {
+                        readOnly: true
+                        text: contentDiffDialog.hexB
+                        font.family: window.monoFont
+                        font.pixelSize: 11
+                        color: colors.text
+                        background: Rectangle { color: colors.panelAlt }
+                    }
+                }
+            }
+        }
     }
 
     // ── Overwrite confirmation dialog ─────────────────────────────────────
@@ -1325,6 +1743,8 @@ ApplicationWindow {
         property string path
         property var pickAction
         property var onDroppedFolder
+        property var recentList: []
+        property var useRecent
         property string validationError: ""
 
         Layout.fillWidth: true
@@ -1338,6 +1758,7 @@ ApplicationWindow {
                 text: picker.label
                 enabled: !folderController.busy
                 onClicked: picker.pickAction()
+                Accessible.name: qsTr("Choose %1").arg(picker.label)
                 background: Rectangle {
                     radius: 5
                     color: parent.down ? colors.accentDark : colors.panelAlt
@@ -1350,6 +1771,39 @@ ApplicationWindow {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     font.pixelSize: 12
+                }
+            }
+
+            Button {
+                id: recentButton
+                text: "▾"
+                enabled: !folderController.busy && picker.recentList.length > 0
+                Accessible.name: qsTr("Recent folders for %1").arg(picker.label)
+                background: Rectangle {
+                    radius: 5
+                    color: parent.down ? colors.accentDark : colors.panelAlt
+                    border.color: colors.line
+                    border.width: 1
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? colors.text : colors.faint
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: 12
+                }
+                onClicked: recentMenu.popup()
+
+                Menu {
+                    id: recentMenu
+                    Repeater {
+                        model: picker.recentList
+                        delegate: MenuItem {
+                            required property string modelData
+                            text: modelData
+                            onTriggered: picker.useRecent(modelData)
+                        }
+                    }
                 }
             }
 

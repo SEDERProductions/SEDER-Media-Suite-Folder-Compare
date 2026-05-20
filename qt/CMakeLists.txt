@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Test)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Test LinguistTools)
 
 set(RUST_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/../Cargo.toml")
 set(RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-target")
@@ -81,6 +81,24 @@ qt_add_resources(seder-folder-compare-qt qml_resources
     PREFIX "/"
     FILES
         "qml/Main.qml"
+)
+
+# ── Translations ─────────────────────────────────────────────────────────────
+# Compile .ts → .qm at build time. The English baseline ships unfinished
+# translations for es/de/fr/ja which translators can fill in later.
+set(SEDER_TS_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/seder_en.ts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/seder_es.ts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/seder_de.ts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/seder_fr.ts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/seder_ja.ts"
+)
+qt_add_lrelease(seder-folder-compare-qt TS_FILES ${SEDER_TS_FILES}
+    QM_FILES_OUTPUT_VARIABLE SEDER_QM_FILES)
+qt_add_resources(seder-folder-compare-qt translation_resources
+    PREFIX "/i18n"
+    BASE "${CMAKE_CURRENT_BINARY_DIR}"
+    FILES ${SEDER_QM_FILES}
 )
 
 target_include_directories(seder-folder-compare-qt PRIVATE

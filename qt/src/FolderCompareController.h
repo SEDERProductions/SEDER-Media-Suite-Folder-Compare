@@ -160,6 +160,22 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void undoLastTransfer();
     Q_INVOKABLE QVariantList buildComparisonTree() const;
 
+    // Sync planner (Bucket B)
+    Q_INVOKABLE QVariantList buildSyncPlan(int syncMode, bool propagateDeletes, int conflict);
+    Q_INVOKABLE void executeSyncPlan(bool dryRun);
+    Q_INVOKABLE void clearSyncPlan();
+
+    // Profiles (Bucket D1)
+    Q_INVOKABLE QStringList listProfiles() const;
+    Q_INVOKABLE void saveProfile(const QString& name);
+    Q_INVOKABLE bool loadProfile(const QString& name);
+    Q_INVOKABLE void deleteProfile(const QString& name);
+
+    // Content diff (Bucket D4)
+    Q_INVOKABLE QVariantList loadTextDiff(const QString& pathA, const QString& pathB);
+    Q_INVOKABLE bool isTextFile(const QString& path) const;
+    Q_INVOKABLE QString hexWindow(const QString& path, qulonglong offset, int length) const;
+
   signals:
     void folderAChanged();
     void folderBChanged();
@@ -287,4 +303,7 @@ class FolderCompareController final : public QObject {
     static constexpr int m_maxRecent = 10;
     void loadRecentFolders();
     void rememberFolder(QStringList& list, const QString& path, const QString& key);
+
+    // Cached sync plan, owned, freed in destructor and on rebuild.
+    struct SfcSyncPlan* m_syncPlan = nullptr;
 };

@@ -97,6 +97,7 @@ FolderCompareController::~FolderCompareController() {
     if (m_report) {
         sfc_report_free(m_report);
     }
+    clearSyncPlan();
 }
 
 QString FolderCompareController::folderA() const {
@@ -1222,4 +1223,173 @@ void FolderCompareController::copyToClipboard(const QString& text) const {
     if (auto* clipboard = QApplication::clipboard()) {
         clipboard->setText(text);
     }
+}
+
+QVariantList FolderCompareController::buildSyncPlan(int syncMode, bool propagateDeletes,
+                                                    int conflict) {
+    QVariantList result;
+    if (!m_report) {
+        addLog(QStringLiteral("Sync plan needs a comparison report first."), LogSeverity::Warning);
+        return result;
+    }
+    clearSyncPlan();
+    const QByteArray folderA = m_folderA.toUtf8();
+    const QByteArray folderB = m_folderB.toUtf8();
+    char* error = nullptr;
+    m_syncPlan = sfc_sync_build_plan(m_report, folderA.constData(), folderB.constData(),
+                                     static_cast<SfcSyncMode>(syncMode), propagateDeletes,
+                                     static_cast<SfcConflictStrategy>(conflict), &error);
+    const QString errorMessage = takeError(error);
+    if (!m_syncPlan) {
+        addLog(QStringLiteral("Sync plan failed: %1").arg(errorMessage), LogSeverity::Error);
+        return result;
+    }
+    const size_t n = sfc_sync_plan_len(m_syncPlan);
+    result.reserve(static_cast<int>(n));
+    for (size_t i = 0; i < n; ++i) {
+        QVariantMap row;
+        row[QStringLiteral("kind")] = static_cast<int>(sfc_sync_plan_action_kind(m_syncPlan, i));
+        const char* src = sfc_sync_plan_action_source(m_syncPlan, i);
+        const char* dst = sfc_sync_plan_action_dest(m_syncPlan, i);
+        const char* path = sfc_sync_plan_action_path(m_syncPlan, i);
+        const char* reason = sfc_sync_plan_action_reason(m_syncPlan, i);
+        row[QStringLiteral("source")] = src ? QString::fromUtf8(src) : QString();
+        row[QStringLiteral("dest")] = dst ? QString::fromUtf8(dst) : QString();
+        row[QStringLiteral("path")] = path ? QString::fromUtf8(path) : QString();
+        row[QStringLiteral("reason")] = reason ? QString::fromUtf8(reason) : QString();
+        result.append(row);
+    }
+    addLog(QStringLiteral("Sync plan built: %1 actions.").arg(n));
+    return result;
+}
+
+void FolderCompareController::executeSyncPlan(bool dryRun) {
+    if (!m_syncPlan) {
+        addLog(QStringLiteral("No sync plan to execute."), LogSeverity::Warning);
+        return;
+    }
+    char* error = nullptr;
+    const bool ok = sfc_sync_plan_execute(m_syncPlan, dryRun, nullptr, nullptr, nullptr, &error);
+    const QString errorMessage = takeError(error);
+    if (!ok) {
+        addLog(QStringLiteral("Sync execute failed: %1").arg(errorMessage), LogSeverity::Error);
+        return;
+    }
+    addLog(dryRun ? QStringLiteral("Sync dry-run finished.") : QStringLiteral("Sync executed."));
+}
+
+void FolderCompareController::clearSyncPlan() {
+    if (m_syncPlan) {
+        sfc_sync_plan_free(m_syncPlan);
+        m_syncPlan = nullptr;
+    }
+}
+
+QStringList FolderCompareController::listProfiles() const {
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("profiles"));
+    QStringList names = settings.childGroups();
+    settings.endGroup();
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+void FolderCompareController::saveProfile(const QString& name) {
+    if (name.isEmpty()) {
+        return;
+    }
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("profiles"));
+    settings.beginGroup(name);
+    settings.setValue(QStringLiteral("folderA"), m_folderA);
+    settings.setValue(QStringLiteral("folderB"), m_folderB);
+    settings.setValue(QStringLiteral("mode"), m_mode);
+    settings.setValue(QStringLiteral("ignoreHiddenSystem"), m_ignoreHiddenSystem);
+    settings.setValue(QStringLiteral("ignorePatterns"), m_ignorePatterns);
+    settings.setValue(QStringLiteral("followSymlinks"), m_followSymlinks);
+    settings.setValue(QStringLiteral("detectRenames"), m_detectRenames);
+    settings.endGroup();
+    settings.endGroup();
+    addLog(QStringLiteral("Saved profile '%1'.").arg(name));
+}
+
+bool FolderCompareController::loadProfile(const QString& name) {
+    if (name.isEmpty()) {
+        return false;
+    }
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("profiles"));
+    if (!settings.childGroups().contains(name)) {
+        settings.endGroup();
+        addLog(QStringLiteral("Profile '%1' not found.").arg(name), LogSeverity::Warning);
+        return false;
+    }
+    settings.beginGroup(name);
+    setFolderA(settings.value(QStringLiteral("folderA")).toString());
+    setFolderB(settings.value(QStringLiteral("folderB")).toString());
+    setMode(settings.value(QStringLiteral("mode"), 0).toInt());
+    setIgnoreHiddenSystem(settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool());
+    setIgnorePatterns(settings.value(QStringLiteral("ignorePatterns")).toString());
+    setFollowSymlinks(settings.value(QStringLiteral("followSymlinks"), false).toBool());
+    setDetectRenames(settings.value(QStringLiteral("detectRenames"), false).toBool());
+    settings.endGroup();
+    settings.endGroup();
+    addLog(QStringLiteral("Loaded profile '%1'.").arg(name));
+    return true;
+}
+
+void FolderCompareController::deleteProfile(const QString& name) {
+    if (name.isEmpty()) {
+        return;
+    }
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("profiles"));
+    settings.remove(name);
+    settings.endGroup();
+    addLog(QStringLiteral("Deleted profile '%1'.").arg(name));
+}
+
+QVariantList FolderCompareController::loadTextDiff(const QString& pathA, const QString& pathB) {
+    QVariantList result;
+    const QByteArray a = pathA.toUtf8();
+    const QByteArray b = pathB.toUtf8();
+    char* error = nullptr;
+    SfcTextDiff* diff = sfc_diff_text(a.constData(), b.constData(), &error);
+    const QString errorMessage = takeError(error);
+    if (!diff) {
+        addLog(QStringLiteral("Text diff failed: %1").arg(errorMessage), LogSeverity::Error);
+        return result;
+    }
+    const size_t n = sfc_text_diff_len(diff);
+    result.reserve(static_cast<int>(n));
+    for (size_t i = 0; i < n; ++i) {
+        QVariantMap line;
+        line[QStringLiteral("kind")] = static_cast<int>(sfc_text_diff_kind(diff, i));
+        line[QStringLiteral("lineA")] = sfc_text_diff_line_a(diff, i);
+        line[QStringLiteral("lineB")] = sfc_text_diff_line_b(diff, i);
+        const char* text = sfc_text_diff_text(diff, i);
+        line[QStringLiteral("text")] = text ? QString::fromUtf8(text) : QString();
+        result.append(line);
+    }
+    sfc_text_diff_free(diff);
+    return result;
+}
+
+bool FolderCompareController::isTextFile(const QString& path) const {
+    const QByteArray p = path.toUtf8();
+    return sfc_is_text_file(p.constData());
+}
+
+QString FolderCompareController::hexWindow(const QString& path, qulonglong offset,
+                                           int length) const {
+    if (length <= 0) {
+        return {};
+    }
+    QByteArray buffer(length, 0);
+    const QByteArray p = path.toUtf8();
+    const size_t read =
+        sfc_hex_window(p.constData(), offset, reinterpret_cast<uint8_t*>(buffer.data()),
+                       static_cast<size_t>(length));
+    buffer.truncate(static_cast<int>(read));
+    return QString::fromLatin1(buffer.toHex(' '));
 }
