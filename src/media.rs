@@ -90,23 +90,30 @@ fn probe_image(path: &Path) -> Result<MediaInfo> {
     Ok(info)
 }
 
+/// Average-hash (aHash): downscale to 8×8 grayscale, compare each pixel to the
+/// mean. One bit per pixel, packed into a u64. Resilient to scaling and minor
+/// brightness shifts, but not rotation or crops.
+///
+/// This is intentionally a small in-house implementation rather than a
+/// dependency: the upstream `img_hash` crate is unmaintained and pulls in
+/// `transpose 0.1.0` (RUSTSEC-2023-0080).
 fn compute_phash(path: &Path) -> Option<u64> {
-    // img_hash 3.2 ships its own copy of `image` 0.23; the loader and Hasher must
-    // agree on which version. Avoid the version-clash with `image` 0.25 by routing
-    // through img_hash's re-exported types.
-    let img = img_hash::image::open(path).ok()?;
-    let hasher = img_hash::HasherConfig::new()
-        .hash_size(8, 8)
-        .hash_alg(img_hash::HashAlg::Mean)
-        .to_hasher();
-    let hash = hasher.hash_image(&img);
-    let bytes = hash.as_bytes();
-    if bytes.len() < 8 {
+    let img = image::open(path).ok()?;
+    let small = img
+        .resize_exact(8, 8, image::imageops::FilterType::Triangle)
+        .to_luma8();
+    let pixels: Vec<u8> = small.pixels().map(|p| p.0[0]).collect();
+    if pixels.len() != 64 {
         return None;
     }
-    let mut buf = [0u8; 8];
-    buf.copy_from_slice(&bytes[..8]);
-    Some(u64::from_be_bytes(buf))
+    let mean: u32 = pixels.iter().map(|&p| p as u32).sum::<u32>() / 64;
+    let mut hash: u64 = 0;
+    for (i, &p) in pixels.iter().enumerate() {
+        if p as u32 > mean {
+            hash |= 1u64 << i;
+        }
+    }
+    Some(hash)
 }
 
 fn probe_media_file(path: &Path) -> Result<MediaInfo> {

@@ -71,8 +71,8 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(int transferTotal READ transferTotal NOTIFY transferProgressChanged)
     Q_PROPERTY(bool followSymlinks READ followSymlinks WRITE setFollowSymlinks NOTIFY
                    followSymlinksChanged)
-    Q_PROPERTY(bool detectRenames READ detectRenames WRITE setDetectRenames NOTIFY
-                   detectRenamesChanged)
+    Q_PROPERTY(
+        bool detectRenames READ detectRenames WRITE setDetectRenames NOTIFY detectRenamesChanged)
     Q_PROPERTY(QString etaText READ etaText NOTIFY progressChanged)
     Q_PROPERTY(QStringList recentFoldersA READ recentFoldersA NOTIFY recentFoldersChanged)
     Q_PROPERTY(QStringList recentFoldersB READ recentFoldersB NOTIFY recentFoldersChanged)

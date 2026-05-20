@@ -23,8 +23,7 @@ class FolderCompareWorker final : public QObject {
 
   public:
     FolderCompareWorker(QString folderA, QString folderB, int mode, bool ignoreHiddenSystem,
-                        QString ignorePatterns, CompareOptions options,
-                        QObject* parent = nullptr);
+                        QString ignorePatterns, CompareOptions options, QObject* parent = nullptr);
 
     bool isCanceled() const;
 

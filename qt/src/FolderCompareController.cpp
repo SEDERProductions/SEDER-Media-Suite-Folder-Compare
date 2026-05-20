@@ -195,15 +195,24 @@ void FolderCompareController::setMode(int mode) {
     assignPropertyIfChanged(m_mode, mode, &FolderCompareController::modeChanged, this);
 }
 
-bool FolderCompareController::followSymlinks() const { return m_followSymlinks; }
-bool FolderCompareController::detectRenames() const { return m_detectRenames; }
-int FolderCompareController::renamedCount() const { return m_renamedCount; }
-QStringList FolderCompareController::recentFoldersA() const { return m_recentFoldersA; }
-QStringList FolderCompareController::recentFoldersB() const { return m_recentFoldersB; }
+bool FolderCompareController::followSymlinks() const {
+    return m_followSymlinks;
+}
+bool FolderCompareController::detectRenames() const {
+    return m_detectRenames;
+}
+int FolderCompareController::renamedCount() const {
+    return m_renamedCount;
+}
+QStringList FolderCompareController::recentFoldersA() const {
+    return m_recentFoldersA;
+}
+QStringList FolderCompareController::recentFoldersB() const {
+    return m_recentFoldersB;
+}
 
 void FolderCompareController::setFollowSymlinks(bool follow) {
-    assignAndPersistPropertyIfChanged(m_followSymlinks, follow,
-                                      QStringLiteral("followSymlinks"),
+    assignAndPersistPropertyIfChanged(m_followSymlinks, follow, QStringLiteral("followSymlinks"),
                                       &FolderCompareController::followSymlinksChanged, this);
 }
 
@@ -213,8 +222,7 @@ void FolderCompareController::setDetectRenames(bool detect) {
 }
 
 QString FolderCompareController::etaText() const {
-    if (m_etaSamples.size() < 2 || m_lastBytesTotal == 0 ||
-        m_lastBytesDone >= m_lastBytesTotal) {
+    if (m_etaSamples.size() < 2 || m_lastBytesTotal == 0 || m_lastBytesDone >= m_lastBytesTotal) {
         return {};
     }
     const auto& first = m_etaSamples.first();
@@ -1193,8 +1201,9 @@ void FolderCompareController::revealInFileManager(const QString& path) const {
     QProcess::execute(QStringLiteral("/usr/bin/open"),
                       {QStringLiteral("-R"), info.absoluteFilePath()});
 #elif defined(Q_OS_WIN)
-    QProcess::startDetached(QStringLiteral("explorer.exe"),
-                            {QStringLiteral("/select,"), QDir::toNativeSeparators(info.absoluteFilePath())});
+    QProcess::startDetached(
+        QStringLiteral("explorer.exe"),
+        {QStringLiteral("/select,"), QDir::toNativeSeparators(info.absoluteFilePath())});
 #else
     // Linux: most file managers don't have a portable "select" flag; open the parent.
     const QString parent = info.absolutePath();
