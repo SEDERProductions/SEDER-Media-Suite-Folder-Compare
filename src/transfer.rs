@@ -44,18 +44,23 @@ pub fn copy_file(source: &Path, dest: &Path, callbacks: &mut ProgressCallbacks<'
         .with_context(|| format!("Failed to open source {}", source.display()))?;
 
     let dest_dir = dest.parent().unwrap_or_else(|| Path::new("."));
-    let dest_name = dest
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("dest");
+    let dest_name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("dest");
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let temp_path = dest_dir.join(format!(".{dest_name}.sfc.tmp.{}.{}", std::process::id(), unique));
+    let temp_path = dest_dir.join(format!(
+        ".{dest_name}.sfc.tmp.{}.{}",
+        std::process::id(),
+        unique
+    ));
 
-    let mut dest_file = fs::File::create(&temp_path)
-        .with_context(|| format!("Failed to create temporary destination {}", temp_path.display()))?;
+    let mut dest_file = fs::File::create(&temp_path).with_context(|| {
+        format!(
+            "Failed to create temporary destination {}",
+            temp_path.display()
+        )
+    })?;
 
     let result: Result<()> = (|| {
         let mut buffer = [0_u8; 64 * 1024];
@@ -69,9 +74,12 @@ pub fn copy_file(source: &Path, dest: &Path, callbacks: &mut ProgressCallbacks<'
             if read == 0 {
                 break;
             }
-            dest_file
-                .write_all(&buffer[..read])
-                .with_context(|| format!("Failed to write temporary destination {}", temp_path.display()))?;
+            dest_file.write_all(&buffer[..read]).with_context(|| {
+                format!(
+                    "Failed to write temporary destination {}",
+                    temp_path.display()
+                )
+            })?;
             transferred = transferred.saturating_add(read as u64);
             callbacks.emit(
                 ProgressEvent::new(
