@@ -391,6 +391,90 @@ fn symlink_appears_as_file_row() {
         .any(|row| row.relative_path == "aliased.mov"));
 }
 
+#[cfg(unix)]
+#[test]
+fn copy_folder_allows_symlink_target_inside_root() {
+    use crate::transfer::copy_folder;
+    use std::os::unix::fs::symlink;
+
+    let src = tempdir().unwrap();
+    let dest = tempdir().unwrap();
+    write(&src.path().join("real.mov"), "abcd");
+    symlink("real.mov", src.path().join("inside-link.mov")).unwrap();
+
+    let mut events: Vec<(ProgressStage, u64, u64, String)> = Vec::new();
+    let mut progress = |event: ProgressEvent| {
+        events.push((
+            event.stage,
+            event.current,
+            event.total,
+            event.path.unwrap_or_default(),
+        ));
+    };
+    let cancel = || false;
+    let mut callbacks = ProgressCallbacks {
+        progress: Some(&mut progress),
+        cancel: Some(&cancel),
+    };
+
+    copy_folder(src.path(), dest.path(), &mut callbacks).unwrap();
+    assert_eq!(
+        fs::read_to_string(dest.path().join("inside-link.mov")).unwrap(),
+        "abcd"
+    );
+
+    assert_eq!(events.len(), 2);
+    assert!(events
+        .iter()
+        .all(|(stage, _, _, _)| *stage == ProgressStage::Transferring));
+    assert_eq!(events[0].1, 1);
+    assert_eq!(events[1].1, 2);
+    assert!(events.iter().all(|(_, _, total, _)| *total == 2));
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_folder_rejects_symlink_target_outside_root() {
+    use crate::transfer::copy_folder;
+    use std::os::unix::fs::symlink;
+
+    let src = tempdir().unwrap();
+    let dest = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let outside_file = outside.path().join("outside.mov");
+    write(&outside_file, "nope");
+    symlink(&outside_file, src.path().join("outside-link.mov")).unwrap();
+
+    let mut callbacks = ProgressCallbacks {
+        progress: None,
+        cancel: None,
+    };
+    let err = copy_folder(src.path(), dest.path(), &mut callbacks).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("outside-link.mov"));
+    assert!(msg.contains("outside the source root"));
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_folder_rejects_broken_symlink_deterministically() {
+    use crate::transfer::copy_folder;
+    use std::os::unix::fs::symlink;
+
+    let src = tempdir().unwrap();
+    let dest = tempdir().unwrap();
+    symlink("missing.mov", src.path().join("broken-link.mov")).unwrap();
+
+    let mut callbacks = ProgressCallbacks {
+        progress: None,
+        cancel: None,
+    };
+    let err = copy_folder(src.path(), dest.path(), &mut callbacks).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("broken-link.mov"));
+    assert!(msg.contains("missing or broken"));
+}
+
 #[test]
 fn csv_export_escapes_quotes_and_includes_folder_rows() {
     let a = tempdir().unwrap();
