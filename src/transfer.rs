@@ -4,7 +4,7 @@ use crate::compare::{ProgressCallbacks, ProgressEvent, ProgressStage};
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use walkdir::WalkDir;
 
@@ -97,6 +97,10 @@ pub fn copy_folder(
         .filter(|e| e.depth() > 0)
         .collect();
 
+    let source_root = source
+        .canonicalize()
+        .with_context(|| format!("Failed to resolve source root {}", source.display()))?;
+
     let total = entries.len() as u64;
 
     for (index, entry) in entries.iter().enumerate() {
@@ -123,10 +127,51 @@ pub fn copy_folder(
                 fs::create_dir_all(parent)
                     .with_context(|| format!("Failed to create directory {}", parent.display()))?;
             }
-            fs::copy(entry.path(), &dest_path).with_context(|| {
+
+            let source_to_copy: PathBuf = if entry.file_type().is_symlink() {
+                let link_target = fs::read_link(entry.path()).with_context(|| {
+                    format!(
+                        "Failed to read symlink at '{}' while copying folder",
+                        rel.display()
+                    )
+                })?;
+                let resolved_target = if link_target.is_absolute() {
+                    link_target
+                } else {
+                    entry.path().parent().unwrap_or(source).join(link_target)
+                };
+                let canonical_target = resolved_target.canonicalize().with_context(|| {
+                    format!(
+                        "Disallowed symlink '{}' because its target is missing or broken.                          Replace it with a valid file under the source root or remove the link.",
+                        rel.display()
+                    )
+                })?;
+
+                if !canonical_target.starts_with(&source_root) {
+                    anyhow::bail!(
+                        "Disallowed symlink '{}' because its target resolves outside the source root.                          Update the symlink target to a file under '{}' or remove the link.",
+                        rel.display(),
+                        source.display()
+                    );
+                }
+
+                if !canonical_target.is_file() {
+                    anyhow::bail!(
+                        "Disallowed symlink '{}' because it does not resolve to a regular file.                          Update the link to point to a file under '{}' or remove the link.",
+                        rel.display(),
+                        source.display()
+                    );
+                }
+
+                canonical_target
+            } else {
+                entry.path().to_path_buf()
+            };
+
+            fs::copy(&source_to_copy, &dest_path).with_context(|| {
                 format!(
                     "Failed to copy {} to {}",
-                    entry.path().display(),
+                    source_to_copy.display(),
                     dest_path.display()
                 )
             })?;
