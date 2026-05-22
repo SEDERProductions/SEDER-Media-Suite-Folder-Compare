@@ -403,8 +403,8 @@ pub fn scan_folder_with_progress(
                 result.folders.insert(rel);
                 continue;
             }
-            if !metadata.is_file()
-                && !(is_symlink && options.symlink_policy == SymlinkPolicy::PreserveAsLink)
+            if !(metadata.is_file()
+                || (is_symlink && options.symlink_policy == SymlinkPolicy::PreserveAsLink))
             {
                 continue;
             }
