@@ -29,7 +29,7 @@ pub struct DiffLine {
 }
 
 /// True if the file looks like plain text: valid UTF-8 and at least 95% printable
-/// (or whitespace) in the first 8 KiB.
+/// characters (or accepted whitespace) in the first 8 KiB.
 pub fn is_text_file(path: &Path) -> bool {
     let mut buf = vec![0u8; 8192];
     let n = match fs::File::open(path).and_then(|mut f| f.read(&mut buf)) {
@@ -37,20 +37,35 @@ pub fn is_text_file(path: &Path) -> bool {
         Err(_) => return false,
     };
     let slice = &buf[..n];
+    // NUL bytes are a strong signal that this is binary data.
     if slice.contains(&0) {
         return false;
     }
-    if std::str::from_utf8(slice).is_err() {
-        return false;
-    }
-    let printable = slice
-        .iter()
-        .filter(|&&b| b == b'\t' || b == b'\n' || b == b'\r' || (0x20..=0x7e).contains(&b))
-        .count();
-    if slice.is_empty() {
+
+    let text = match std::str::from_utf8(slice) {
+        Ok(text) => text,
+        Err(_) => return false,
+    };
+    if text.is_empty() {
         return true;
     }
-    (printable * 100) / slice.len() >= 95
+
+    // Treat Unicode letters/numbers/punctuation/symbols/whitespace as printable
+    // while excluding a small set of common binary-ish control characters.
+    let printable = text
+        .chars()
+        .filter(|&ch| {
+            if matches!(
+                ch,
+                '\u{0007}' | '\u{0008}' | '\u{000B}' | '\u{000C}' | '\u{007F}'
+            ) {
+                return false;
+            }
+            ch.is_alphanumeric() || ch.is_whitespace() || !ch.is_control()
+        })
+        .count();
+    let total = text.chars().count();
+    (printable * 100) / total >= 95
 }
 
 /// Line-level diff of two text files.
