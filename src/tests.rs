@@ -24,6 +24,7 @@ fn recursively_scans_files_and_folders() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
@@ -89,6 +90,7 @@ fn ignores_system_files() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
@@ -108,6 +110,7 @@ fn supports_bare_and_glob_ignore_patterns() {
             ignore_hidden_system: true,
             ignore_patterns: vec!["*.tmp,proxy".into()],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
@@ -284,6 +287,7 @@ fn ignore_literal_no_substring_match() {
             // "nodejs" folder — only basename equality, never substring.
             ignore_patterns: vec!["node".into()],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
@@ -300,6 +304,7 @@ fn ignore_glob_matches_pattern() {
             ignore_hidden_system: false,
             ignore_patterns: vec!["*node*".into()],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
@@ -317,6 +322,7 @@ fn ignore_exact_relative_path_without_substring_matching() {
             ignore_hidden_system: false,
             ignore_patterns: vec!["cache/render.tmp".into()],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
@@ -359,6 +365,7 @@ fn progress_events_for_100_files_are_dense() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
         ProgressStage::ScanningA,
         &mut callbacks,
@@ -375,20 +382,93 @@ fn progress_events_for_100_files_are_dense() {
 
 #[cfg(unix)]
 #[test]
-fn symlink_appears_as_file_row() {
+fn symlink_to_in_tree_file_is_followed() {
     use std::os::unix::fs::symlink;
-    let a = tempdir().unwrap();
-    let b = tempdir().unwrap();
-    let target = a.path().join("real.mov");
+    let root = tempdir().unwrap();
+    let target = root.path().join("real.mov");
     write(&target, "abcd");
-    write(&b.path().join("real.mov"), "abcd");
-    symlink(&target, a.path().join("aliased.mov")).unwrap();
+    symlink(&target, root.path().join("aliased.mov")).unwrap();
 
-    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
-    assert!(report
-        .rows
-        .iter()
-        .any(|row| row.relative_path == "aliased.mov"));
+    let scan = scan_folder(
+        root.path(),
+        &ScanOptions {
+            ignore_hidden_system: true,
+            ignore_patterns: vec![],
+            checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
+        },
+    )
+    .unwrap();
+    assert!(scan.files.contains_key("aliased.mov"));
+    assert!(scan.files["aliased.mov"].is_symlink);
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_to_out_of_tree_file_is_rejected_in_tree_policy() {
+    use std::os::unix::fs::symlink;
+    let root = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let target = outside.path().join("outside.mov");
+    write(&target, "abcd");
+    symlink(&target, root.path().join("outside-link.mov")).unwrap();
+
+    let scan = scan_folder(
+        root.path(),
+        &ScanOptions {
+            ignore_hidden_system: true,
+            ignore_patterns: vec![],
+            checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
+        },
+    )
+    .unwrap();
+    assert!(!scan.files.contains_key("outside-link.mov"));
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_to_directory_is_recorded_as_folder() {
+    use std::os::unix::fs::symlink;
+    let root = tempdir().unwrap();
+    let folder = root.path().join("real_dir");
+    fs::create_dir_all(&folder).unwrap();
+    symlink(&folder, root.path().join("dir-link")).unwrap();
+    let scan = scan_folder(
+        root.path(),
+        &ScanOptions {
+            ignore_hidden_system: true,
+            ignore_patterns: vec![],
+            checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
+        },
+    )
+    .unwrap();
+    assert!(scan.folders.contains("dir-link"));
+    assert!(!scan.files.contains_key("dir-link"));
+}
+
+#[cfg(unix)]
+#[test]
+fn broken_symlink_is_skipped() {
+    use std::os::unix::fs::symlink;
+    let root = tempdir().unwrap();
+    symlink(
+        root.path().join("missing-target.mov"),
+        root.path().join("broken.mov"),
+    )
+    .unwrap();
+    let scan = scan_folder(
+        root.path(),
+        &ScanOptions {
+            ignore_hidden_system: true,
+            ignore_patterns: vec![],
+            checksum: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
+        },
+    )
+    .unwrap();
+    assert!(!scan.files.contains_key("broken.mov"));
 }
 
 #[test]
