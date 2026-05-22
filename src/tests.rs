@@ -769,20 +769,21 @@ fn two_way_newer_wins_prefers_newer_mtime_and_fallbacks() {
 
     let a = tempdir().unwrap();
     let b = tempdir().unwrap();
-    let mk_row = |path: &str, modified_a: Option<u64>, modified_b: Option<u64>, size_a: u64, size_b: u64| {
-        ComparisonRow {
-            relative_path: path.to_string(),
-            status: FileStatus::Changed,
-            size_a: Some(size_a),
-            size_b: Some(size_b),
-            modified_a,
-            modified_b,
-            checksum_a: None,
-            checksum_b: None,
-            rename_from: None,
-            rename_to: None,
-        }
-    };
+    let mk_row =
+        |path: &str, modified_a: Option<u64>, modified_b: Option<u64>, size_a: u64, size_b: u64| {
+            ComparisonRow {
+                relative_path: path.to_string(),
+                status: FileStatus::Changed,
+                size_a: Some(size_a),
+                size_b: Some(size_b),
+                modified_a,
+                modified_b,
+                checksum_a: None,
+                checksum_b: None,
+                rename_from: None,
+                rename_to: None,
+            }
+        };
 
     let report = CompareReport {
         rows: vec![
@@ -806,22 +807,41 @@ fn two_way_newer_wins_prefers_newer_mtime_and_fallbacks() {
     );
     assert_eq!(plan.actions.len(), 4);
 
-    let a_newer = plan.actions.iter().find(|x| x.relative_path == "a-newer.mov").unwrap();
+    let a_newer = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "a-newer.mov")
+        .unwrap();
     assert_eq!(a_newer.source, a.path().join("a-newer.mov"));
     assert!(a_newer.reason.contains("A newer mtime"));
 
-    let b_newer = plan.actions.iter().find(|x| x.relative_path == "b-newer.mov").unwrap();
+    let b_newer = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "b-newer.mov")
+        .unwrap();
     assert_eq!(b_newer.source, b.path().join("b-newer.mov"));
     assert!(b_newer.reason.contains("B newer mtime"));
 
-    let missing = plan.actions.iter().find(|x| x.relative_path == "missing-mtime.mov").unwrap();
+    let missing = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "missing-mtime.mov")
+        .unwrap();
     assert_eq!(missing.source, a.path().join("missing-mtime.mov"));
-    assert!(missing.reason.contains("fallback: missing mtime, larger size"));
+    assert!(missing
+        .reason
+        .contains("fallback: missing mtime, larger size"));
 
-    let equal = plan.actions.iter().find(|x| x.relative_path == "equal-mtime.mov").unwrap();
-    assert!(equal.reason.contains("fallback: equal mtime, path-order tie-break"));
+    let equal = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "equal-mtime.mov")
+        .unwrap();
+    assert!(equal
+        .reason
+        .contains("fallback: equal mtime, path-order tie-break"));
 }
-
 
 #[test]
 fn diff_text_detects_inserted_line() {

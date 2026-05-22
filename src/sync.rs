@@ -175,11 +175,17 @@ fn plan_row(
                         reason: "two-way conflict requires user decision".to_string(),
                     })
                 }
-                ConflictStrategy::LargerWins => (larger_wins_or_path_tiebreak(row), "A/B larger size or path tie-break"),
+                ConflictStrategy::LargerWins => (
+                    larger_wins_or_path_tiebreak(row),
+                    "A/B larger size or path tie-break",
+                ),
                 ConflictStrategy::NewerWins => match (row.modified_a, row.modified_b) {
                     (Some(ma), Some(mb)) if ma > mb => (true, "A newer mtime"),
                     (Some(ma), Some(mb)) if mb > ma => (false, "B newer mtime"),
-                    (Some(_), Some(_)) => (path_tiebreak_prefers_a(rel), "fallback: equal mtime, path-order tie-break"),
+                    (Some(_), Some(_)) => (
+                        path_tiebreak_prefers_a(rel),
+                        "fallback: equal mtime, path-order tie-break",
+                    ),
                     _ => {
                         let a_wins = larger_wins_or_path_tiebreak(row);
                         let reason = if row.size_a.unwrap_or(0) == row.size_b.unwrap_or(0) {
