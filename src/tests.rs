@@ -260,6 +260,38 @@ fn empty_folders_compare_cleanly() {
 }
 
 #[test]
+fn is_text_file_accepts_utf8_ascii_text() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("ascii.txt");
+    fs::write(&path, "Simple ASCII text\nwith numbers 123.\n").unwrap();
+    assert!(diff::is_text_file(&path));
+}
+
+#[test]
+fn is_text_file_accepts_utf8_accented_latin_text() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("accented.txt");
+    fs::write(&path, "Café déjà vu — naïve façade.\n").unwrap();
+    assert!(diff::is_text_file(&path));
+}
+
+#[test]
+fn is_text_file_accepts_utf8_cjk_text() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("cjk.txt");
+    fs::write(&path, "日本語のテキストと中文字符。\n").unwrap();
+    assert!(diff::is_text_file(&path));
+}
+
+#[test]
+fn is_text_file_rejects_binary_like_bytes() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("binary.bin");
+    fs::write(&path, vec![0x01, 0x02, 0x07, 0x00, 0x41, 0x42]).unwrap();
+    assert!(!diff::is_text_file(&path));
+}
+
+#[test]
 fn long_paths_remain_relative_and_exportable() {
     let a = tempdir().unwrap();
     let b = tempdir().unwrap();
