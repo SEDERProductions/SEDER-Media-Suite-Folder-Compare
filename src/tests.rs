@@ -790,3 +790,59 @@ fn hex_window_reads_partial_file() {
     let past = hex_window(&p, 8, 100).unwrap();
     assert_eq!(past, b"ij");
 }
+
+#[test]
+fn copy_file_cancellation_keeps_existing_destination_unchanged() {
+    use crate::transfer::copy_file;
+
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("source.bin");
+    let dest = dir.path().join("dest.bin");
+
+    fs::write(&source, vec![b'a'; 256 * 1024]).unwrap();
+    fs::write(&dest, "original-destination").unwrap();
+
+    let cancel = || true;
+    let mut callbacks = ProgressCallbacks {
+        progress: None,
+        cancel: Some(&cancel),
+    };
+
+    let err = copy_file(&source, &dest, &mut callbacks).unwrap_err();
+    assert!(err.to_string().contains(CANCELED_MESSAGE));
+    assert_eq!(fs::read_to_string(&dest).unwrap(), "original-destination");
+}
+
+#[test]
+fn copy_file_write_error_keeps_existing_destination_unchanged() {
+    use crate::transfer::copy_file;
+
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("source.bin");
+    let locked_dir = dir.path().join("locked");
+    fs::create_dir_all(&locked_dir).unwrap();
+    let dest = locked_dir.join("dest.bin");
+    fs::write(&source, "new-content").unwrap();
+    fs::write(&dest, "original-destination").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&locked_dir, fs::Permissions::from_mode(0o555)).unwrap();
+    }
+
+    let mut callbacks = ProgressCallbacks::default();
+    let err = copy_file(&source, &dest, &mut callbacks).unwrap_err();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&locked_dir, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    assert!(
+        err.to_string().contains("Failed to create temporary destination")
+            || err.to_string().contains("Permission denied")
+    );
+    assert_eq!(fs::read_to_string(&dest).unwrap(), "original-destination");
+}
