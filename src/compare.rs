@@ -119,6 +119,7 @@ pub struct FileEntry {
     pub size: u64,
     pub modified: Option<u64>,
     pub checksums: Option<FileChecksums>,
+    pub is_symlink: bool,
     pub media: Option<MediaInfo>,
 }
 
@@ -136,7 +137,7 @@ pub struct ScanOptions {
     pub ignore_patterns: Vec<String>,
     pub checksum: bool,
     pub probe_media: bool,
-    pub follow_symlinks: bool,
+    pub symlink_policy: SymlinkPolicy,
 }
 
 impl Default for ScanOptions {
@@ -146,9 +147,17 @@ impl Default for ScanOptions {
             ignore_patterns: Vec::new(),
             checksum: false,
             probe_media: false,
-            follow_symlinks: false,
+            symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymlinkPolicy {
+    Ignore,
+    FollowInTreeOnly,
+    FollowAll,
+    PreserveAsLink,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -381,6 +390,9 @@ pub fn scan_folder_with_progress(
     }
 
     let matcher = IgnoreMatcher::new(&options.ignore_patterns);
+    let canonical_root = root
+        .canonicalize()
+        .with_context(|| format!("Unable to canonicalize root {}", root.display()))?;
     let mut result = ScanResult::default();
     let mut visited = 0_u64;
 
@@ -392,12 +404,7 @@ pub fn scan_folder_with_progress(
         Some(root.display().to_string()),
     );
 
-    let walker = if options.follow_symlinks {
-        WalkDir::new(root).follow_links(true)
-    } else {
-        WalkDir::new(root).follow_links(false)
-    };
-    for entry in walker
+    for entry in WalkDir::new(root)
         .into_iter()
         .filter_entry(|entry| entry.depth() == 0 || !should_ignore(entry.path(), options, &matcher))
     {
@@ -417,10 +424,32 @@ pub fn scan_folder_with_progress(
         }
 
         if entry.file_type().is_file() || entry.file_type().is_symlink() {
-            let metadata = if entry.file_type().is_symlink() && !options.follow_symlinks {
-                match std::fs::metadata(entry.path()) {
-                    Ok(m) => m,
-                    Err(_) => continue,
+            let is_symlink = entry.file_type().is_symlink();
+            let metadata = if is_symlink {
+                match options.symlink_policy {
+                    SymlinkPolicy::Ignore => continue,
+                    SymlinkPolicy::PreserveAsLink => std::fs::symlink_metadata(entry.path())
+                        .map_err(|e| {
+                            anyhow::Error::from(e)
+                                .context(format!("Unable to stat {}", entry.path().display()))
+                        })?,
+                    SymlinkPolicy::FollowAll | SymlinkPolicy::FollowInTreeOnly => {
+                        let canonical_target = match entry.path().canonicalize() {
+                            Ok(path) => path,
+                            Err(_) => continue, // broken symlink
+                        };
+                        if options.symlink_policy == SymlinkPolicy::FollowInTreeOnly
+                            && !canonical_target.starts_with(&canonical_root)
+                        {
+                            continue;
+                        }
+                        std::fs::metadata(&canonical_target).with_context(|| {
+                            format!(
+                                "Unable to stat symlink target {}",
+                                canonical_target.display()
+                            )
+                        })?
+                    }
                 }
             } else {
                 entry.metadata().map_err(|e| {
@@ -434,7 +463,9 @@ pub fn scan_folder_with_progress(
                 result.folders.insert(rel);
                 continue;
             }
-            if !metadata.is_file() {
+            if !(metadata.is_file()
+                || (is_symlink && options.symlink_policy == SymlinkPolicy::PreserveAsLink))
+            {
                 continue;
             }
             let modified = metadata
@@ -465,6 +496,7 @@ pub fn scan_folder_with_progress(
                     size: metadata.len(),
                     modified,
                     checksums,
+                    is_symlink,
                     media,
                 },
             );
@@ -735,12 +767,17 @@ pub fn compare_folders_with_progress(
         mode,
         CompareMode::MediaMetadata | CompareMode::PerceptualHash
     );
+    let symlink_policy = if follow_symlinks {
+        SymlinkPolicy::FollowInTreeOnly
+    } else {
+        SymlinkPolicy::Ignore
+    };
     let options = ScanOptions {
         ignore_hidden_system,
         ignore_patterns,
         checksum,
         probe_media,
-        follow_symlinks,
+        symlink_policy,
     };
 
     let left = scan_folder_with_progress(a, &options, ProgressStage::ScanningA, callbacks)?;

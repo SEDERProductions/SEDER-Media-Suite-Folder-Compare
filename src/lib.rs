@@ -14,7 +14,7 @@ pub use compare::{
     parse_ignore_patterns, path_buf_string, scan_folder, scan_folder_with_progress, ChecksumMethod,
     CompareMode, CompareReport, CompareTolerance, ComparisonRow, FileChecksums, FileEntry,
     FileStatus, ProgressCallbacks, ProgressEvent, ProgressStage, ScanOptions, ScanResult,
-    CANCELED_MESSAGE,
+    SymlinkPolicy, CANCELED_MESSAGE,
 };
 pub use ffi::{
     FfiReport, SfcCancelCallback, SfcCompareMode, SfcCompareRequest, SfcFileStatus,

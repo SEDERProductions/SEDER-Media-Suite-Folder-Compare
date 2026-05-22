@@ -19,6 +19,7 @@ Builds are ad-hoc signed by SEDER Productions for tamper-detection. On macOS, yo
 - Native Qt 6/QML interface with dense production-style controls.
 - Rust core for local recursive scanning, checksums, and report generation.
 - Compare modes: path + size, path + size + modified time, and path + size + checksum.
+- Explicit symlink policies in the scan engine: ignore links, follow all, follow only targets that stay inside the scanned root, or preserve symlink entries as links.
 - Ignore hidden/system files and comma-separated ignore patterns.
 - Background comparison worker so the UI stays responsive.
 - Virtualized Qt table model for large result sets.
@@ -26,6 +27,13 @@ Builds are ad-hoc signed by SEDER Productions for tamper-detection. On macOS, yo
 - TXT and CSV report export.
 
 All processing is local. The app does not upload folders, file names, checksums, or reports.
+
+### Symlink behavior
+
+- Default compare behavior uses **FollowInTreeOnly** to reduce traversal risk.
+- In this mode, each candidate symlink target is canonicalized and only followed when the canonical target path remains under the canonicalized scan root.
+- Symlinks that point outside the scan root, or broken symlinks, are skipped in **FollowInTreeOnly** mode.
+- Symlinks that resolve to directories are represented as folder entries; symlinks that resolve to files are represented as file entries.
 
 ## Build From Source
 
