@@ -796,6 +796,86 @@ fn sync_real_run_copies_files() {
 }
 
 #[test]
+fn two_way_newer_wins_prefers_newer_mtime_and_fallbacks() {
+    use crate::sync::{build_plan, ConflictStrategy, SyncMode, SyncOptions};
+
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    let mk_row =
+        |path: &str, modified_a: Option<u64>, modified_b: Option<u64>, size_a: u64, size_b: u64| {
+            ComparisonRow {
+                relative_path: path.to_string(),
+                status: FileStatus::Changed,
+                size_a: Some(size_a),
+                size_b: Some(size_b),
+                modified_a,
+                modified_b,
+                checksum_a: None,
+                checksum_b: None,
+                rename_from: None,
+                rename_to: None,
+            }
+        };
+
+    let report = CompareReport {
+        rows: vec![
+            mk_row("a-newer.mov", Some(200), Some(100), 10, 20),
+            mk_row("b-newer.mov", Some(100), Some(200), 20, 10),
+            mk_row("missing-mtime.mov", None, Some(500), 30, 10),
+            mk_row("equal-mtime.mov", Some(300), Some(300), 10, 10),
+        ],
+        ..CompareReport::default()
+    };
+
+    let plan = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::TwoWayNewerWins,
+        &SyncOptions {
+            conflict_strategy: ConflictStrategy::NewerWins,
+            ..SyncOptions::default()
+        },
+    );
+    assert_eq!(plan.actions.len(), 4);
+
+    let a_newer = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "a-newer.mov")
+        .unwrap();
+    assert_eq!(a_newer.source, a.path().join("a-newer.mov"));
+    assert!(a_newer.reason.contains("A newer mtime"));
+
+    let b_newer = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "b-newer.mov")
+        .unwrap();
+    assert_eq!(b_newer.source, b.path().join("b-newer.mov"));
+    assert!(b_newer.reason.contains("B newer mtime"));
+
+    let missing = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "missing-mtime.mov")
+        .unwrap();
+    assert_eq!(missing.source, a.path().join("missing-mtime.mov"));
+    assert!(missing
+        .reason
+        .contains("fallback: missing mtime, larger size"));
+
+    let equal = plan
+        .actions
+        .iter()
+        .find(|x| x.relative_path == "equal-mtime.mov")
+        .unwrap();
+    assert!(equal
+        .reason
+        .contains("fallback: equal mtime, path-order tie-break"));
+}
+
+#[test]
 fn diff_text_detects_inserted_line() {
     use crate::diff::{diff_text, is_text_file, LineKind};
     let a = tempdir().unwrap();

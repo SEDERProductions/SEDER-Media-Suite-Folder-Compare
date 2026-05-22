@@ -165,10 +165,7 @@ fn plan_row(
             reason: "two-way: missing in A".to_string(),
         }),
         (SyncMode::TwoWayNewerWins, FileStatus::Changed) => {
-            // Caller did not provide mtime here; resolve by size as a fallback
-            // when strategy is LargerWins, otherwise default to A→B.
-            let direction = match options.conflict_strategy {
-                ConflictStrategy::LargerWins => row.size_a.unwrap_or(0) >= row.size_b.unwrap_or(0),
+            let (a_wins, reason) = match options.conflict_strategy {
                 ConflictStrategy::Skip | ConflictStrategy::AskUser => {
                     return Some(SyncAction {
                         kind: SyncActionKind::Skip,
@@ -178,15 +175,35 @@ fn plan_row(
                         reason: "two-way conflict requires user decision".to_string(),
                     })
                 }
-                ConflictStrategy::NewerWins => true,
+                ConflictStrategy::LargerWins => (
+                    larger_wins_or_path_tiebreak(row),
+                    "A/B larger size or path tie-break",
+                ),
+                ConflictStrategy::NewerWins => match (row.modified_a, row.modified_b) {
+                    (Some(ma), Some(mb)) if ma > mb => (true, "A newer mtime"),
+                    (Some(ma), Some(mb)) if mb > ma => (false, "B newer mtime"),
+                    (Some(_), Some(_)) => (
+                        path_tiebreak_prefers_a(rel),
+                        "fallback: equal mtime, path-order tie-break",
+                    ),
+                    _ => {
+                        let a_wins = larger_wins_or_path_tiebreak(row);
+                        let reason = if row.size_a.unwrap_or(0) == row.size_b.unwrap_or(0) {
+                            "fallback: missing mtime, size tie, path-order tie-break"
+                        } else {
+                            "fallback: missing mtime, larger size"
+                        };
+                        (a_wins, reason)
+                    }
+                },
             };
-            if direction {
+            if a_wins {
                 Some(SyncAction {
                     kind: SyncActionKind::Copy,
                     source: path_a,
                     dest: path_b,
                     relative_path: rel.clone(),
-                    reason: "two-way: A wins".to_string(),
+                    reason: format!("two-way: A wins ({reason})"),
                 })
             } else {
                 Some(SyncAction {
@@ -194,7 +211,7 @@ fn plan_row(
                     source: path_b,
                     dest: path_a,
                     relative_path: rel.clone(),
-                    reason: "two-way: B wins".to_string(),
+                    reason: format!("two-way: B wins ({reason})"),
                 })
             }
         }
@@ -224,6 +241,21 @@ fn plan_row(
         (SyncMode::TwoWayManual, _) => None,
 
         _ => None,
+    }
+}
+
+fn path_tiebreak_prefers_a(relative_path: &str) -> bool {
+    // Stable deterministic tie-break for equal candidates.
+    relative_path.as_bytes().iter().fold(0u8, |acc, b| acc ^ b) % 2 == 0
+}
+
+fn larger_wins_or_path_tiebreak(row: &ComparisonRow) -> bool {
+    let size_a = row.size_a.unwrap_or(0);
+    let size_b = row.size_b.unwrap_or(0);
+    if size_a == size_b {
+        path_tiebreak_prefers_a(&row.relative_path)
+    } else {
+        size_a > size_b
     }
 }
 
