@@ -368,10 +368,11 @@ pub fn scan_folder_with_progress(
             let metadata = if is_symlink {
                 match options.symlink_policy {
                     SymlinkPolicy::Ignore => continue,
-                    SymlinkPolicy::PreserveAsLink => entry.metadata().map_err(|e| {
-                        anyhow::Error::from(e)
-                            .context(format!("Unable to stat {}", entry.path().display()))
-                    })?,
+                    SymlinkPolicy::PreserveAsLink => std::fs::symlink_metadata(entry.path())
+                        .map_err(|e| {
+                            anyhow::Error::from(e)
+                                .context(format!("Unable to stat {}", entry.path().display()))
+                        })?,
                     SymlinkPolicy::FollowAll | SymlinkPolicy::FollowInTreeOnly => {
                         let canonical_target = match entry.path().canonicalize() {
                             Ok(path) => path,
@@ -402,7 +403,9 @@ pub fn scan_folder_with_progress(
                 result.folders.insert(rel);
                 continue;
             }
-            if !metadata.is_file() {
+            if !metadata.is_file()
+                && !(is_symlink && options.symlink_policy == SymlinkPolicy::PreserveAsLink)
+            {
                 continue;
             }
             let modified = metadata

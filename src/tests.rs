@@ -450,6 +450,30 @@ fn symlink_to_directory_is_recorded_as_folder() {
 
 #[cfg(unix)]
 #[test]
+fn preserve_as_link_keeps_symlink_entry() {
+    use std::os::unix::fs::symlink;
+    let root = tempdir().unwrap();
+    let target = root.path().join("real.mov");
+    write(&target, "abcd");
+    symlink(&target, root.path().join("preserved.mov")).unwrap();
+
+    let scan = scan_folder(
+        root.path(),
+        &ScanOptions {
+            ignore_hidden_system: true,
+            ignore_patterns: vec![],
+            checksum: false,
+            symlink_policy: SymlinkPolicy::PreserveAsLink,
+        },
+    )
+    .unwrap();
+
+    assert!(scan.files.contains_key("preserved.mov"));
+    assert!(scan.files["preserved.mov"].is_symlink);
+}
+
+#[cfg(unix)]
+#[test]
 fn broken_symlink_is_skipped() {
     use std::os::unix::fs::symlink;
     let root = tempdir().unwrap();
