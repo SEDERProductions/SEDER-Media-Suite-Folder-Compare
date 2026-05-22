@@ -98,6 +98,7 @@ pub fn report_txt(report: &CompareReport, title: &str) -> String {
             FileStatus::Changed => "Changed",
             FileStatus::OnlyInA => "Only in A",
             FileStatus::OnlyInB => "Only in B",
+            FileStatus::Renamed => "Renamed",
         };
         let size_a = row
             .size_a
@@ -137,6 +138,7 @@ pub fn report_csv(report: &CompareReport) -> String {
                 FileStatus::Changed => "Changed",
                 FileStatus::OnlyInA => "OnlyInA",
                 FileStatus::OnlyInB => "OnlyInB",
+                FileStatus::Renamed => "Renamed",
             }),
             csv_cell(&row.relative_path),
             csv_cell(

@@ -10,12 +10,20 @@
 
 Q_DECLARE_OPAQUE_POINTER(SfcReport*)
 
+struct CompareOptions {
+    quint64 toleranceMtimeSecs = 2;
+    quint64 toleranceDurationMs = 200;
+    quint32 tolerancePhashHamming = 6;
+    bool followSymlinks = false;
+    bool detectRenames = false;
+};
+
 class FolderCompareWorker final : public QObject {
     Q_OBJECT
 
   public:
     FolderCompareWorker(QString folderA, QString folderB, int mode, bool ignoreHiddenSystem,
-                        QString ignorePatterns, QObject* parent = nullptr);
+                        QString ignorePatterns, CompareOptions options, QObject* parent = nullptr);
 
     bool isCanceled() const;
 
@@ -38,6 +46,7 @@ class FolderCompareWorker final : public QObject {
     int m_mode = 0;
     bool m_ignoreHiddenSystem = true;
     QString m_ignorePatterns;
+    CompareOptions m_options;
     std::atomic_bool m_canceled = false;
     std::atomic<int> m_terminalStage{static_cast<int>(SFC_PROGRESS_FAILED)};
 };

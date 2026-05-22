@@ -24,6 +24,7 @@ fn recursively_scans_files_and_folders() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -89,6 +90,7 @@ fn ignores_system_files() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -108,6 +110,7 @@ fn supports_bare_and_glob_ignore_patterns() {
             ignore_hidden_system: true,
             ignore_patterns: vec!["*.tmp,proxy".into()],
             checksum: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -195,6 +198,9 @@ fn progress_reports_scan_checksum_compare_and_complete() {
             CompareMode::PathSizeChecksum,
             true,
             vec![],
+            CompareTolerance::default(),
+            false,
+            false,
             &mut callbacks,
         )
         .unwrap();
@@ -228,6 +234,9 @@ fn comparison_can_be_canceled() {
         CompareMode::PathSizeChecksum,
         true,
         vec![],
+        CompareTolerance::default(),
+        false,
+        false,
         &mut callbacks,
     )
     .unwrap_err();
@@ -284,6 +293,7 @@ fn ignore_literal_no_substring_match() {
             // "nodejs" folder — only basename equality, never substring.
             ignore_patterns: vec!["node".into()],
             checksum: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -300,6 +310,7 @@ fn ignore_glob_matches_pattern() {
             ignore_hidden_system: false,
             ignore_patterns: vec!["*node*".into()],
             checksum: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -317,6 +328,7 @@ fn ignore_exact_relative_path_without_substring_matching() {
             ignore_hidden_system: false,
             ignore_patterns: vec!["cache/render.tmp".into()],
             checksum: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -359,6 +371,7 @@ fn progress_events_for_100_files_are_dense() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            ..Default::default()
         },
         ProgressStage::ScanningA,
         &mut callbacks,
@@ -486,4 +499,178 @@ fn csv_export_escapes_quotes_and_includes_folder_rows() {
     let csv = report_csv(&report);
     assert!(csv.contains("\"A001/clip \"\"one\"\".mov\""));
     assert!(csv.contains("\"FolderOnlyInA\",\"only-folder\""));
+}
+
+#[test]
+fn modified_time_within_tolerance_is_matching() {
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("clip.mov"), "abcd");
+    write(&b.path().join("clip.mov"), "abcd");
+    let t = FileTime::from_unix_time(1_700_000_000, 0);
+    filetime::set_file_times(a.path().join("clip.mov"), t, t).unwrap();
+    let t2 = FileTime::from_unix_time(1_700_000_001, 0); // 1s drift
+    filetime::set_file_times(b.path().join("clip.mov"), t2, t2).unwrap();
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeModified,
+        true,
+        vec![],
+        CompareTolerance {
+            mtime_secs: 5,
+            ..CompareTolerance::default()
+        },
+        false,
+        false,
+        &mut cb,
+    )
+    .unwrap();
+    assert_eq!(report.rows[0].status, FileStatus::Matching);
+}
+
+#[test]
+fn rename_detection_reclassifies_only_a_only_b_pair() {
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("old-name.mov"), "samebytes");
+    write(&b.path().join("new-name.mov"), "samebytes");
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeChecksum,
+        true,
+        vec![],
+        CompareTolerance::default(),
+        false,
+        true,
+        &mut cb,
+    )
+    .unwrap();
+
+    assert!(
+        report.rows.iter().any(|r| r.status == FileStatus::Renamed),
+        "expected a renamed row, got: {:?}",
+        report
+            .rows
+            .iter()
+            .map(|r| (&r.relative_path, &r.status))
+            .collect::<Vec<_>>()
+    );
+    let renamed = report
+        .rows
+        .iter()
+        .find(|r| r.status == FileStatus::Renamed)
+        .unwrap();
+    assert_eq!(renamed.rename_from.as_deref(), Some("old-name.mov"));
+    assert_eq!(renamed.rename_to.as_deref(), Some("new-name.mov"));
+}
+
+#[test]
+fn sync_plan_mirror_a_to_b_copies_missing_and_optionally_deletes() {
+    use crate::sync::{build_plan, SyncActionKind, SyncMode, SyncOptions};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("in-a.mov"), "x");
+    write(&b.path().join("in-b.mov"), "x");
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    let plan = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::MirrorAToB,
+        &SyncOptions {
+            propagate_deletes: true,
+            ..SyncOptions::default()
+        },
+    );
+    let kinds: Vec<_> = plan.actions.iter().map(|a| a.kind).collect();
+    assert!(kinds.contains(&SyncActionKind::Copy));
+    assert!(kinds.contains(&SyncActionKind::Delete));
+
+    let plan_no_delete = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::MirrorAToB,
+        &SyncOptions {
+            propagate_deletes: false,
+            ..SyncOptions::default()
+        },
+    );
+    assert!(plan_no_delete
+        .actions
+        .iter()
+        .all(|a| a.kind != SyncActionKind::Delete));
+}
+
+#[test]
+fn sync_dry_run_does_not_touch_disk() {
+    use crate::sync::{build_plan, execute_plan, SyncMode, SyncOptions};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("only-a.mov"), "x");
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    let options = SyncOptions {
+        propagate_deletes: false,
+        dry_run: true,
+        ..SyncOptions::default()
+    };
+    let plan = build_plan(&report, a.path(), b.path(), SyncMode::MirrorAToB, &options);
+    let mut cb = ProgressCallbacks::default();
+    execute_plan(&plan, &options, &mut cb).unwrap();
+    assert!(!b.path().join("only-a.mov").exists());
+}
+
+#[test]
+fn sync_real_run_copies_files() {
+    use crate::sync::{build_plan, execute_plan, SyncMode, SyncOptions};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("only-a.mov"), "hello");
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    let options = SyncOptions {
+        propagate_deletes: false,
+        dry_run: false,
+        ..SyncOptions::default()
+    };
+    let plan = build_plan(&report, a.path(), b.path(), SyncMode::MirrorAToB, &options);
+    let mut cb = ProgressCallbacks::default();
+    execute_plan(&plan, &options, &mut cb).unwrap();
+    assert_eq!(fs::read(b.path().join("only-a.mov")).unwrap(), b"hello");
+}
+
+#[test]
+fn diff_text_detects_inserted_line() {
+    use crate::diff::{diff_text, is_text_file, LineKind};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    let ap = a.path().join("a.txt");
+    let bp = b.path().join("b.txt");
+    fs::write(&ap, "one\ntwo\nthree\n").unwrap();
+    fs::write(&bp, "one\ntwo\nINSERTED\nthree\n").unwrap();
+    assert!(is_text_file(&ap));
+    let hunks = diff_text(&ap, &bp).unwrap();
+    assert!(hunks
+        .iter()
+        .any(|h| h.kind == LineKind::Insert && h.text == "INSERTED"));
+}
+
+#[test]
+fn hex_window_reads_partial_file() {
+    use crate::diff::hex_window;
+    let dir = tempdir().unwrap();
+    let p = dir.path().join("bin");
+    fs::write(&p, b"abcdefghij").unwrap();
+    let window = hex_window(&p, 2, 4).unwrap();
+    assert_eq!(window, b"cdef");
+    let past = hex_window(&p, 8, 100).unwrap();
+    assert_eq!(past, b"ij");
 }

@@ -4,9 +4,11 @@
 
 #include <QApplication>
 #include <QIcon>
+#include <QLocale>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QTranslator>
 #include <QUrl>
 
 #ifndef SEDER_APP_VERSION
@@ -23,6 +25,20 @@ int main(int argc, char* argv[]) {
 
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
     qRegisterMetaType<SfcReport*>("SfcReport*");
+
+    // Install a translator that matches the system locale. .qm files are
+    // bundled under qrc:/i18n/ via qt_add_lrelease in CMakeLists.txt. If no
+    // match exists the app simply uses the source strings (English).
+    QTranslator translator;
+    const QStringList uiLanguages = QLocale().uiLanguages();
+    for (const QString& locale : uiLanguages) {
+        const QString baseName =
+            QStringLiteral("seder_") + QLocale(locale).name().section('_', 0, 0);
+        if (translator.load(QStringLiteral(":/i18n/") + baseName)) {
+            QApplication::installTranslator(&translator);
+            break;
+        }
+    }
 
     FolderCompareController controller;
 
