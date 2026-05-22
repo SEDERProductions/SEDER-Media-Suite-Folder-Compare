@@ -177,6 +177,8 @@ pub struct ComparisonRow {
     pub status: FileStatus,
     pub size_a: Option<u64>,
     pub size_b: Option<u64>,
+    pub modified_a: Option<u64>,
+    pub modified_b: Option<u64>,
     pub checksum_a: Option<String>,
     pub checksum_b: Option<String>,
     /// For `Renamed` rows, the original path in A. `None` otherwise.
@@ -610,6 +612,8 @@ pub fn compare_scans_with_progress(
             status,
             size_a: left.map(|entry| entry.size),
             size_b: right.map(|entry| entry.size),
+            modified_a: left.and_then(|entry| entry.modified),
+            modified_b: right.and_then(|entry| entry.modified),
             checksum_a: left.and_then(|entry| {
                 entry
                     .checksums
