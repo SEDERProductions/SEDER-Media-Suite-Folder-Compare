@@ -24,6 +24,8 @@ fn recursively_scans_files_and_folders() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -90,6 +92,8 @@ fn ignores_system_files() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -110,6 +114,8 @@ fn supports_bare_and_glob_ignore_patterns() {
             ignore_hidden_system: true,
             ignore_patterns: vec!["*.tmp,proxy".into()],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -198,6 +204,9 @@ fn progress_reports_scan_checksum_compare_and_complete() {
             CompareMode::PathSizeChecksum,
             true,
             vec![],
+            CompareTolerance::default(),
+            false,
+            false,
             &mut callbacks,
         )
         .unwrap();
@@ -231,6 +240,9 @@ fn comparison_can_be_canceled() {
         CompareMode::PathSizeChecksum,
         true,
         vec![],
+        CompareTolerance::default(),
+        false,
+        false,
         &mut callbacks,
     )
     .unwrap_err();
@@ -287,6 +299,8 @@ fn ignore_literal_no_substring_match() {
             // "nodejs" folder — only basename equality, never substring.
             ignore_patterns: vec!["node".into()],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -304,6 +318,8 @@ fn ignore_glob_matches_pattern() {
             ignore_hidden_system: false,
             ignore_patterns: vec!["*node*".into()],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -322,6 +338,8 @@ fn ignore_exact_relative_path_without_substring_matching() {
             ignore_hidden_system: false,
             ignore_patterns: vec!["cache/render.tmp".into()],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -365,6 +383,8 @@ fn progress_events_for_100_files_are_dense() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
         ProgressStage::ScanningA,
@@ -395,6 +415,7 @@ fn symlink_to_in_tree_file_is_followed() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -419,6 +440,7 @@ fn symlink_to_out_of_tree_file_is_rejected_in_tree_policy() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -440,6 +462,7 @@ fn symlink_to_directory_is_recorded_as_folder() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
@@ -463,6 +486,7 @@ fn preserve_as_link_keeps_symlink_entry() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            probe_media: false,
             symlink_policy: SymlinkPolicy::PreserveAsLink,
         },
     )
@@ -488,11 +512,96 @@ fn broken_symlink_is_skipped() {
             ignore_hidden_system: true,
             ignore_patterns: vec![],
             checksum: false,
+            probe_media: false,
             symlink_policy: SymlinkPolicy::FollowInTreeOnly,
         },
     )
     .unwrap();
     assert!(!scan.files.contains_key("broken.mov"));
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_folder_allows_symlink_target_inside_root() {
+    use crate::transfer::copy_folder;
+    use std::os::unix::fs::symlink;
+
+    let src = tempdir().unwrap();
+    let dest = tempdir().unwrap();
+    write(&src.path().join("real.mov"), "abcd");
+    symlink("real.mov", src.path().join("inside-link.mov")).unwrap();
+
+    let mut events: Vec<(ProgressStage, u64, u64, String)> = Vec::new();
+    let mut progress = |event: ProgressEvent| {
+        events.push((
+            event.stage,
+            event.current,
+            event.total,
+            event.path.unwrap_or_default(),
+        ));
+    };
+    let cancel = || false;
+    let mut callbacks = ProgressCallbacks {
+        progress: Some(&mut progress),
+        cancel: Some(&cancel),
+    };
+
+    copy_folder(src.path(), dest.path(), &mut callbacks).unwrap();
+    assert_eq!(
+        fs::read_to_string(dest.path().join("inside-link.mov")).unwrap(),
+        "abcd"
+    );
+
+    assert_eq!(events.len(), 2);
+    assert!(events
+        .iter()
+        .all(|(stage, _, _, _)| *stage == ProgressStage::Transferring));
+    assert_eq!(events[0].1, 1);
+    assert_eq!(events[1].1, 2);
+    assert!(events.iter().all(|(_, _, total, _)| *total == 2));
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_folder_rejects_symlink_target_outside_root() {
+    use crate::transfer::copy_folder;
+    use std::os::unix::fs::symlink;
+
+    let src = tempdir().unwrap();
+    let dest = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let outside_file = outside.path().join("outside.mov");
+    write(&outside_file, "nope");
+    symlink(&outside_file, src.path().join("outside-link.mov")).unwrap();
+
+    let mut callbacks = ProgressCallbacks {
+        progress: None,
+        cancel: None,
+    };
+    let err = copy_folder(src.path(), dest.path(), &mut callbacks).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("outside-link.mov"));
+    assert!(msg.contains("outside the source root"));
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_folder_rejects_broken_symlink_deterministically() {
+    use crate::transfer::copy_folder;
+    use std::os::unix::fs::symlink;
+
+    let src = tempdir().unwrap();
+    let dest = tempdir().unwrap();
+    symlink("missing.mov", src.path().join("broken-link.mov")).unwrap();
+
+    let mut callbacks = ProgressCallbacks {
+        progress: None,
+        cancel: None,
+    };
+    let err = copy_folder(src.path(), dest.path(), &mut callbacks).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("broken-link.mov"));
+    assert!(msg.contains("missing or broken"));
 }
 
 #[test]
@@ -506,4 +615,178 @@ fn csv_export_escapes_quotes_and_includes_folder_rows() {
     let csv = report_csv(&report);
     assert!(csv.contains("\"A001/clip \"\"one\"\".mov\""));
     assert!(csv.contains("\"FolderOnlyInA\",\"only-folder\""));
+}
+
+#[test]
+fn modified_time_within_tolerance_is_matching() {
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("clip.mov"), "abcd");
+    write(&b.path().join("clip.mov"), "abcd");
+    let t = FileTime::from_unix_time(1_700_000_000, 0);
+    filetime::set_file_times(a.path().join("clip.mov"), t, t).unwrap();
+    let t2 = FileTime::from_unix_time(1_700_000_001, 0); // 1s drift
+    filetime::set_file_times(b.path().join("clip.mov"), t2, t2).unwrap();
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeModified,
+        true,
+        vec![],
+        CompareTolerance {
+            mtime_secs: 5,
+            ..CompareTolerance::default()
+        },
+        false,
+        false,
+        &mut cb,
+    )
+    .unwrap();
+    assert_eq!(report.rows[0].status, FileStatus::Matching);
+}
+
+#[test]
+fn rename_detection_reclassifies_only_a_only_b_pair() {
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("old-name.mov"), "samebytes");
+    write(&b.path().join("new-name.mov"), "samebytes");
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeChecksum,
+        true,
+        vec![],
+        CompareTolerance::default(),
+        false,
+        true,
+        &mut cb,
+    )
+    .unwrap();
+
+    assert!(
+        report.rows.iter().any(|r| r.status == FileStatus::Renamed),
+        "expected a renamed row, got: {:?}",
+        report
+            .rows
+            .iter()
+            .map(|r| (&r.relative_path, &r.status))
+            .collect::<Vec<_>>()
+    );
+    let renamed = report
+        .rows
+        .iter()
+        .find(|r| r.status == FileStatus::Renamed)
+        .unwrap();
+    assert_eq!(renamed.rename_from.as_deref(), Some("old-name.mov"));
+    assert_eq!(renamed.rename_to.as_deref(), Some("new-name.mov"));
+}
+
+#[test]
+fn sync_plan_mirror_a_to_b_copies_missing_and_optionally_deletes() {
+    use crate::sync::{build_plan, SyncActionKind, SyncMode, SyncOptions};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("in-a.mov"), "x");
+    write(&b.path().join("in-b.mov"), "x");
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    let plan = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::MirrorAToB,
+        &SyncOptions {
+            propagate_deletes: true,
+            ..SyncOptions::default()
+        },
+    );
+    let kinds: Vec<_> = plan.actions.iter().map(|a| a.kind).collect();
+    assert!(kinds.contains(&SyncActionKind::Copy));
+    assert!(kinds.contains(&SyncActionKind::Delete));
+
+    let plan_no_delete = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::MirrorAToB,
+        &SyncOptions {
+            propagate_deletes: false,
+            ..SyncOptions::default()
+        },
+    );
+    assert!(plan_no_delete
+        .actions
+        .iter()
+        .all(|a| a.kind != SyncActionKind::Delete));
+}
+
+#[test]
+fn sync_dry_run_does_not_touch_disk() {
+    use crate::sync::{build_plan, execute_plan, SyncMode, SyncOptions};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("only-a.mov"), "x");
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    let options = SyncOptions {
+        propagate_deletes: false,
+        dry_run: true,
+        ..SyncOptions::default()
+    };
+    let plan = build_plan(&report, a.path(), b.path(), SyncMode::MirrorAToB, &options);
+    let mut cb = ProgressCallbacks::default();
+    execute_plan(&plan, &options, &mut cb).unwrap();
+    assert!(!b.path().join("only-a.mov").exists());
+}
+
+#[test]
+fn sync_real_run_copies_files() {
+    use crate::sync::{build_plan, execute_plan, SyncMode, SyncOptions};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("only-a.mov"), "hello");
+
+    let report = compare_folders(a.path(), b.path(), CompareMode::PathSize, true, vec![]).unwrap();
+    let options = SyncOptions {
+        propagate_deletes: false,
+        dry_run: false,
+        ..SyncOptions::default()
+    };
+    let plan = build_plan(&report, a.path(), b.path(), SyncMode::MirrorAToB, &options);
+    let mut cb = ProgressCallbacks::default();
+    execute_plan(&plan, &options, &mut cb).unwrap();
+    assert_eq!(fs::read(b.path().join("only-a.mov")).unwrap(), b"hello");
+}
+
+#[test]
+fn diff_text_detects_inserted_line() {
+    use crate::diff::{diff_text, is_text_file, LineKind};
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    let ap = a.path().join("a.txt");
+    let bp = b.path().join("b.txt");
+    fs::write(&ap, "one\ntwo\nthree\n").unwrap();
+    fs::write(&bp, "one\ntwo\nINSERTED\nthree\n").unwrap();
+    assert!(is_text_file(&ap));
+    let hunks = diff_text(&ap, &bp).unwrap();
+    assert!(hunks
+        .iter()
+        .any(|h| h.kind == LineKind::Insert && h.text == "INSERTED"));
+}
+
+#[test]
+fn hex_window_reads_partial_file() {
+    use crate::diff::hex_window;
+    let dir = tempdir().unwrap();
+    let p = dir.path().join("bin");
+    fs::write(&p, b"abcdefghij").unwrap();
+    let window = hex_window(&p, 2, 4).unwrap();
+    assert_eq!(window, b"cdef");
+    let past = hex_window(&p, 8, 100).unwrap();
+    assert_eq!(past, b"ij");
 }

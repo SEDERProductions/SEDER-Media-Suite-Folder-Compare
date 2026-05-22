@@ -14,15 +14,45 @@ extern "C" {
 typedef enum SfcCompareMode {
     SFC_COMPARE_PATH_SIZE = 0,
     SFC_COMPARE_PATH_SIZE_MODIFIED = 1,
-    SFC_COMPARE_PATH_SIZE_CHECKSUM = 2
+    SFC_COMPARE_PATH_SIZE_CHECKSUM = 2,
+    SFC_COMPARE_MEDIA_METADATA = 3,
+    SFC_COMPARE_PERCEPTUAL_HASH = 4
 } SfcCompareMode;
 
 typedef enum SfcFileStatus {
     SFC_STATUS_MATCHING = 0,
     SFC_STATUS_CHANGED = 1,
     SFC_STATUS_ONLY_IN_A = 2,
-    SFC_STATUS_ONLY_IN_B = 3
+    SFC_STATUS_ONLY_IN_B = 3,
+    SFC_STATUS_RENAMED = 4
 } SfcFileStatus;
+
+typedef enum SfcSyncMode {
+    SFC_SYNC_MIRROR_A_TO_B = 0,
+    SFC_SYNC_MIRROR_B_TO_A = 1,
+    SFC_SYNC_TWO_WAY_NEWER_WINS = 2,
+    SFC_SYNC_TWO_WAY_MANUAL = 3
+} SfcSyncMode;
+
+typedef enum SfcConflictStrategy {
+    SFC_CONFLICT_NEWER_WINS = 0,
+    SFC_CONFLICT_LARGER_WINS = 1,
+    SFC_CONFLICT_ASK_USER = 2,
+    SFC_CONFLICT_SKIP = 3
+} SfcConflictStrategy;
+
+typedef enum SfcSyncActionKind {
+    SFC_ACTION_COPY = 0,
+    SFC_ACTION_DELETE = 1,
+    SFC_ACTION_RENAME = 2,
+    SFC_ACTION_SKIP = 3
+} SfcSyncActionKind;
+
+typedef enum SfcDiffLineKind {
+    SFC_DIFF_EQUAL = 0,
+    SFC_DIFF_INSERT = 1,
+    SFC_DIFF_DELETE = 2
+} SfcDiffLineKind;
 
 typedef enum SfcProgressStage {
     SFC_PROGRESS_SCANNING_A = 0,
@@ -66,6 +96,11 @@ typedef struct SfcCompareRequest {
     SfcProgressCallback progress;
     SfcCancelCallback cancel;
     void *user_data;
+    uint64_t tolerance_mtime_secs;
+    uint64_t tolerance_duration_ms;
+    uint32_t tolerance_phash_hamming;
+    bool follow_symlinks;
+    bool detect_renames;
 } SfcCompareRequest;
 
 SfcReport *sfc_compare_folders(const SfcCompareRequest *request, char **error_out);
@@ -125,6 +160,52 @@ bool sfc_copy_folder(
 bool sfc_remove_file(const char *path, char **error_out);
 
 bool sfc_remove_folder(const char *path, char **error_out);
+
+// ── Sync plan ──────────────────────────────────────────────────────────────
+
+typedef struct SfcSyncPlan SfcSyncPlan;
+
+SfcSyncPlan *sfc_sync_build_plan(
+    const SfcReport *report,
+    const char *folder_a,
+    const char *folder_b,
+    SfcSyncMode mode,
+    bool propagate_deletes,
+    SfcConflictStrategy conflict,
+    char **error_out);
+
+void sfc_sync_plan_free(SfcSyncPlan *plan);
+size_t sfc_sync_plan_len(const SfcSyncPlan *plan);
+SfcSyncActionKind sfc_sync_plan_action_kind(const SfcSyncPlan *plan, size_t index);
+const char *sfc_sync_plan_action_source(const SfcSyncPlan *plan, size_t index);
+const char *sfc_sync_plan_action_dest(const SfcSyncPlan *plan, size_t index);
+const char *sfc_sync_plan_action_path(const SfcSyncPlan *plan, size_t index);
+const char *sfc_sync_plan_action_reason(const SfcSyncPlan *plan, size_t index);
+
+bool sfc_sync_plan_execute(
+    const SfcSyncPlan *plan,
+    bool dry_run,
+    SfcProgressCallback progress,
+    SfcCancelCallback cancel,
+    void *user_data,
+    char **error_out);
+
+// ── Text & hex diff ────────────────────────────────────────────────────────
+
+typedef struct SfcTextDiff SfcTextDiff;
+
+SfcTextDiff *sfc_diff_text(const char *path_a, const char *path_b, char **error_out);
+void sfc_text_diff_free(SfcTextDiff *diff);
+size_t sfc_text_diff_len(const SfcTextDiff *diff);
+SfcDiffLineKind sfc_text_diff_kind(const SfcTextDiff *diff, size_t index);
+uint32_t sfc_text_diff_line_a(const SfcTextDiff *diff, size_t index);
+uint32_t sfc_text_diff_line_b(const SfcTextDiff *diff, size_t index);
+const char *sfc_text_diff_text(const SfcTextDiff *diff, size_t index);
+
+bool sfc_is_text_file(const char *path);
+
+// Caller passes a buffer of `length` bytes; returns number of bytes read (<= length).
+size_t sfc_hex_window(const char *path, uint64_t offset, uint8_t *out, size_t length);
 
 #ifdef __cplusplus
 }
