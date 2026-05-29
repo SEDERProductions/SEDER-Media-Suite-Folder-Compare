@@ -41,36 +41,52 @@ jobs:
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $latest_tag"
 
-          if [[ "$latest_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          # Current version declared in Cargo.toml. If a maintainer has bumped
+          # this ahead of the latest tag (e.g. for a minor/major release), honor
+          # it and tag the existing commit without an extra bump commit.
+          # Otherwise fall back to the default behavior: auto-bump the patch.
+          cargo_version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          latest_version="${latest_tag#v}"
+          echo "Cargo.toml version: $cargo_version"
+
+          if [ "$cargo_version" != "$latest_version" ] && \
+             [ "$(printf '%s\n%s\n' "$cargo_version" "$latest_version" | sort -V | tail -1)" = "$cargo_version" ]; then
+            new_tag="v${cargo_version}"
+            do_bump_commit=false
+            echo "Cargo.toml is ahead of the latest tag; releasing $new_tag from the current commit."
+          elif [[ "$latest_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             major="${BASH_REMATCH[1]}"
             minor="${BASH_REMATCH[2]}"
             patch="${BASH_REMATCH[3]}"
             new_patch=$((patch + 1))
             new_tag="v${major}.${minor}.${new_patch}"
+            do_bump_commit=true
           else
             new_tag="v0.1.0"
+            do_bump_commit=true
           fi
 
           echo "New tag: $new_tag"
           echo "release_tag=$new_tag" >> "$GITHUB_OUTPUT"
 
           version_no_v="${new_tag#v}"
-          sed -i "s/^version = \".*\"/version = \"${version_no_v}\"/" Cargo.toml
-          cargo update --package seder-folder-compare --precise "${version_no_v}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet; then
-            echo "No version changes, skipping commit"
-          else
-            git add Cargo.toml Cargo.lock
-            git commit -m "chore: bump version to ${new_tag}"
-            git tag "$new_tag"
-            git fetch origin main && git rebase origin/main
-            git push origin HEAD:main
-            git push origin "$new_tag"
+          if [ "$do_bump_commit" = true ]; then
+            sed -i "s/^version = \".*\"/version = \"${version_no_v}\"/" Cargo.toml
+            cargo update --package seder-folder-compare --precise "${version_no_v}"
+            if ! git diff --quiet; then
+              git add Cargo.toml Cargo.lock
+              git commit -m "chore: bump version to ${new_tag}"
+              git fetch origin main && git rebase origin/main
+              git push origin HEAD:main
+            fi
           fi
+
+          git tag "$new_tag"
+          git push origin "$new_tag"
 
   build:
     name: Build ${{ matrix.name }}
