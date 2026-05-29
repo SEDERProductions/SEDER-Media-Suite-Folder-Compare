@@ -13,8 +13,9 @@ a `sfc` CLI, ETA on the progress bar, and quality-of-life polish to the GUI.
   image dimensions, EXIF DateTimeOriginal, video/audio duration, codec, sample
   rate) and `PerceptualHash` (image pHash with configurable Hamming tolerance,
   BLAKE3 fallback for non-image files). Powered by pure-Rust crates
-  (`kamadak-exif`, `image`, `img_hash`, `symphonia`) so cross-platform builds
-  stay clean.
+  (`kamadak-exif`, `image`, `symphonia`) plus an in-house average-hash (aHash)
+  implementation so cross-platform builds stay clean and no native deps are
+  required.
 - **Tolerances.** New `CompareTolerance` covers mtime drift, duration drift,
   and pHash Hamming distance, plumbed end-to-end through the core, FFI, and
   CLI.
@@ -29,8 +30,14 @@ a `sfc` CLI, ETA on the progress bar, and quality-of-life polish to the GUI.
 - **ETA on progress bar.** Rolling 5s byte-throughput window in the
   controller surfaces an `etaText` label next to the progress bar during
   transfers.
-- **Symlink handling toggle.** New "Follow symlinks" option in the sidebar
-  (default off, persisted).
+- **Explicit symlink policy.** New `SymlinkPolicy` (`Ignore`,
+  `FollowInTreeOnly`, `FollowAll`, `PreserveAsLink`) on `ScanOptions` replaces
+  implicit symlink dereferencing. The default for two-folder comparisons is
+  `FollowInTreeOnly`, which canonicalizes each target and only follows links
+  that stay inside the scanned root; broken or out-of-tree links are skipped.
+  Surfaced in the sidebar as a "Follow symlinks" toggle (default off,
+  persisted), which maps to `FollowInTreeOnly` when enabled and `Ignore` when
+  disabled.
 - **Recent folders.** Last 10 folders for both A and B persisted via
   `QSettings`; missing paths are pruned on load. Exposed as
   `recentFoldersA`/`recentFoldersB` properties.
@@ -46,19 +53,51 @@ a `sfc` CLI, ETA on the progress bar, and quality-of-life polish to the GUI.
 - `ProgressEvent` gained `bytes_done` / `bytes_total` fields used by the
   ETA tracker. The existing `ProgressEvent::new` constructor keeps callers
   source-compatible.
-- `ScanOptions` gained `probe_media` and `follow_symlinks`; old callers can
-  now use `..Default::default()`.
+- `ScanOptions` gained `probe_media` and `symlink_policy` (defaulting to
+  `FollowInTreeOnly`); old callers can now use `..Default::default()`.
+- `FileEntry` gained `is_symlink` and `media`; `ComparisonRow` gained
+  `modified_a`/`modified_b` (used by mtime-aware sync conflict resolution).
 - `SfcCompareRequest` gained tolerance, follow-symlinks, and detect-renames
   fields. Existing C callers zero-initializing the struct continue to work
   (zeros fall back to defaults).
+- `copy_file` now writes to a temporary file in the destination directory,
+  flushes and `sync_all`s, then atomically renames over the destination, so a
+  canceled or failed copy never leaves a partial or corrupted file in place.
+- `copy_folder` resolves symlinks against the canonicalized source root and
+  only copies link targets that stay inside it; out-of-tree, broken, or
+  non-regular targets produce an actionable error naming the offending entry.
+- `is_text_file` now validates UTF-8 and classifies by Unicode scalar (treating
+  letters, numbers, punctuation, symbols, and whitespace as printable) with a
+  95% printable threshold over the first 8 KiB, instead of a raw ASCII byte
+  check, while keeping the NUL-byte fast-fail.
+- Two-way `NewerWins` sync now decides conflicts using the more recent mtime,
+  falling back to larger-size and then a stable path-order tie-break when
+  mtimes are missing or equal; action reasons spell out which side won and why.
 - Mode dropdown now lists five options including the two media-aware modes.
+
+### Internationalization & accessibility
+
+- i18n scaffolding via Qt Linguist: `.ts` sources for English, Spanish,
+  German, French, and Japanese compiled to `.qm` at build time and loaded by
+  `QTranslator` against the system locale. Non-English strings ship as
+  translatable stubs for translators to fill in.
+- `Accessible.name` / role / state on interactive controls (folder pickers,
+  mode dropdown, filter and action buttons, sync and profile controls).
+
+### Security
+
+- Removed `img_hash` (and its 13 transitive dependencies) to resolve
+  RUSTSEC-2023-0080 (buffer overflow in `transpose` 0.1.0, pulled in via
+  `rustdct`/`rustfft`). Image perceptual hashing is now a small in-house aHash.
 
 ### Build / dev
 
 - New Rust dependencies: `clap`, `serde`/`serde_json`, `similar`,
-  `kamadak-exif`, `image`, `img_hash`, `symphonia`.
-- 7 new lib tests for tolerance, rename detection, sync plan/execute,
-  dry-run behavior, text diff, and hex window (27 total, all green).
+  `kamadak-exif`, `image`, `symphonia`.
+- New lib tests for tolerance, rename detection, sync plan/execute, dry-run
+  behavior, text diff, hex window, the four `SymlinkPolicy` modes, atomic
+  `copy_file` cancel/error safety, UTF-8 text classification, and mtime-based
+  two-way conflict resolution (36 total, all green).
 - `cargo fmt --check`, `cargo clippy -D warnings`, and the Qt
   `compare-model-tests` are all green.
 
