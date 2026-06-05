@@ -63,7 +63,7 @@ ApplicationWindow {
     }
 
     function filterLabel(index) {
-        return ["All", "Matching", "Changed", "Only A", "Only B", "Folders"][index]
+        return [qsTr("All"), qsTr("Matching"), qsTr("Changed"), qsTr("Only A"), qsTr("Only B"), qsTr("Folders")][index]
     }
 
     function filterCount(index) {
@@ -147,7 +147,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "01 / FOLDERS"
+                        text: qsTr("01 / FOLDERS")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -171,7 +171,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Open A: " + window.hintText("Ctrl+O") + "  •  Open B: " + window.hintText(window.openFolderBShortcut)
+                        text: qsTr("Open A: %1  •  Open B: %2").arg(window.hintText("Ctrl+O")).arg(window.hintText(window.openFolderBShortcut))
                         color: colors.muted
                         font.pixelSize: 11
                         font.family: window.monoFont
@@ -262,7 +262,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "02 / COMPARE MODE"
+                        text: qsTr("02 / COMPARE MODE")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -336,7 +336,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "03 / IGNORE"
+                        text: qsTr("03 / IGNORE")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -466,7 +466,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "04 / THEME"
+                        text: qsTr("04 / THEME")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -534,7 +534,7 @@ ApplicationWindow {
                         Button {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
-                            text: "Export TXT (" + window.hintText(window.exportTxtShortcut) + ")"
+                            text: qsTr("Export TXT (%1)").arg(window.hintText(window.exportTxtShortcut))
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
                             background: Rectangle {
@@ -551,12 +551,12 @@ ApplicationWindow {
                                 elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Run a comparison first"
+                            ToolTip.text: qsTr("Run a comparison first")
                         }
                         Button {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
-                            text: "Export CSV (" + window.hintText(window.exportCsvShortcut) + ")"
+                            text: qsTr("Export CSV (%1)").arg(window.hintText(window.exportCsvShortcut))
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
                             background: Rectangle {
@@ -573,7 +573,7 @@ ApplicationWindow {
                                 elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Run a comparison first"
+                            ToolTip.text: qsTr("Run a comparison first")
                         }
                     }
 
@@ -677,12 +677,12 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
-                        MetricBox { label: "Only A"; value: folderController.onlyACount; accent: colors.warn }
-                        MetricBox { label: "Only B"; value: folderController.onlyBCount; accent: colors.warn }
-                        MetricBox { label: "Changed"; value: folderController.changedCount; accent: colors.bad }
-                        MetricBox { label: "Matching"; value: folderController.matchingCount; accent: colors.good }
-                        MetricBox { label: "Folders"; value: folderController.folderDiffCount; accent: colors.faint }
-                        MetricBox { label: "Scanned"; value: folderController.totalSizeText; accent: colors.faint }
+                        MetricBox { label: qsTr("Only A"); value: folderController.onlyACount; accent: colors.warn }
+                        MetricBox { label: qsTr("Only B"); value: folderController.onlyBCount; accent: colors.warn }
+                        MetricBox { label: qsTr("Changed"); value: folderController.changedCount; accent: colors.bad }
+                        MetricBox { label: qsTr("Matching"); value: folderController.matchingCount; accent: colors.good }
+                        MetricBox { label: qsTr("Folders"); value: folderController.folderDiffCount; accent: colors.faint }
+                        MetricBox { label: qsTr("Scanned"); value: folderController.totalSizeText; accent: colors.faint }
                     }
 
                     RowLayout {
@@ -749,7 +749,7 @@ ApplicationWindow {
                                     font.pixelSize: 12
                                 }
                                 ToolTip.visible: hovered && !enabled
-                                ToolTip.text: "No results for this filter"
+                                ToolTip.text: qsTr("No results for this filter")
                             }
                         }
 
@@ -788,7 +788,7 @@ ApplicationWindow {
 
                         Button {
                             Layout.fillWidth: true
-                            text: "\u25C0 Copy to A"
+                            text: "\u25C0 " + qsTr("Copy to A")
                             enabled: folderController.canCopyToA
                             onClicked: folderController.copySelectedToA()
                             background: Rectangle {
@@ -806,11 +806,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Select items with content in B to copy to A"
+                            ToolTip.text: qsTr("Select items with content in B to copy to A")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Copy to B \u25B6"
+                            text: qsTr("Copy to B") + " \u25B6"
                             enabled: folderController.canCopyToB
                             onClicked: folderController.copySelectedToB()
                             background: Rectangle {
@@ -828,11 +828,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Select items with content in A to copy to B"
+                            ToolTip.text: qsTr("Select items with content in A to copy to B")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "\u25C0 Move to A"
+                            text: "\u25C0 " + qsTr("Move to A")
                             enabled: folderController.canMoveToA
                             onClicked: folderController.moveSelectedToA()
                             background: Rectangle {
@@ -850,11 +850,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Copy selected items from B to A, then delete originals"
+                            ToolTip.text: qsTr("Copy selected items from B to A, then delete originals")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Move to B \u25B6"
+                            text: qsTr("Move to B") + " \u25B6"
                             enabled: folderController.canMoveToB
                             onClicked: folderController.moveSelectedToB()
                             background: Rectangle {
@@ -872,11 +872,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Copy selected items from A to B, then delete originals"
+                            ToolTip.text: qsTr("Copy selected items from A to B, then delete originals")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Undo"
+                            text: qsTr("Undo")
                             enabled: folderController.canUndo
                             onClicked: folderController.undoLastTransfer()
                             background: Rectangle {
@@ -1079,12 +1079,12 @@ ApplicationWindow {
                                             anchors.fill: parent; anchors.leftMargin: 6
                                             text: {
                                                 var s = node.status
-                                                if (s === 0) return "\u2713 Match"
-                                                if (s === 1) return "\u2717 Changed"
-                                                if (s === 2) return "\u25B8 Only A"
-                                                if (s === 3) return "\u25B8 Only B"
-                                                if (s === 4) return "Folder (A)"
-                                                if (s === 5) return "Folder (B)"
+                                                if (s === 0) return "\u2713 " + qsTr("Match")
+                                                if (s === 1) return "\u2717 " + qsTr("Changed")
+                                                if (s === 2) return "\u25B8 " + qsTr("Only A")
+                                                if (s === 3) return "\u25B8 " + qsTr("Only B")
+                                                if (s === 4) return qsTr("Folder (A)")
+                                                if (s === 5) return qsTr("Folder (B)")
                                                 return ""
                                             }
                                             color: {
@@ -1235,7 +1235,7 @@ ApplicationWindow {
                             Label {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width - 80, 520)
-                                text: folderController.busy ? "Comparison running..." : "Choose two folders and start comparison."
+                                text: folderController.busy ? qsTr("Comparison running...") : qsTr("Choose two folders and start comparison.")
                                 color: colors.muted
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
@@ -1264,7 +1264,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: 8
                         Label {
-                            text: "STATUS"
+                            text: qsTr("STATUS")
                             color: colors.muted
                             font.pixelSize: 12
                             font.family: window.monoFont
@@ -1287,7 +1287,7 @@ ApplicationWindow {
                             }
                         }
                         Button {
-                            text: "Clear"
+                            text: qsTr("Clear")
                             onClicked: folderController.clearLog()
                             background: Rectangle {
                                 radius: 4
@@ -1590,7 +1590,7 @@ ApplicationWindow {
                             width: 60
                             verticalAlignment: Text.AlignVCenter
                             height: parent.height
-                            text: ["Copy", "Delete", "Rename", "Skip"][modelData.kind] || ""
+                            text: [qsTr("Copy"), qsTr("Delete"), qsTr("Rename"), qsTr("Skip")][modelData.kind] || ""
                             color: modelData.kind === 1 ? colors.bad : colors.text
                             font.family: window.monoFont
                             font.pixelSize: 11
@@ -1841,7 +1841,7 @@ ApplicationWindow {
 
     Dialog {
         id: overwriteDialog
-        title: "File Already Exists"
+        title: qsTr("File Already Exists")
         standardButtons: Dialog.NoButton
         modal: true
         closePolicy: Popup.CloseOnEscape
@@ -1856,7 +1856,7 @@ ApplicationWindow {
             Layout.fillWidth: true
 
             Label {
-                text: "The destination already contains:"
+                text: qsTr("The destination already contains:")
                 font.bold: true
                 color: colors.text
             }
@@ -1876,7 +1876,7 @@ ApplicationWindow {
                 rowSpacing: 4
                 Layout.fillWidth: true
 
-                Label { text: "Source:"; color: colors.muted }
+                Label { text: qsTr("Source:"); color: colors.muted }
                 Label {
                     text: overwriteDialog.pendingInfo.sourceInfo ? overwriteDialog.pendingInfo.sourceInfo : ""
                     font.family: window.monoFont
@@ -1884,7 +1884,7 @@ ApplicationWindow {
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
-                Label { text: "Destination:"; color: colors.muted }
+                Label { text: qsTr("Destination:"); color: colors.muted }
                 Label {
                     text: overwriteDialog.pendingInfo.destInfo ? overwriteDialog.pendingInfo.destInfo : ""
                     font.family: window.monoFont
@@ -1897,7 +1897,7 @@ ApplicationWindow {
             Rectangle { height: 1; color: colors.line; Layout.fillWidth: true }
 
             Label {
-                text: "How do you want to proceed?"
+                text: qsTr("How do you want to proceed?")
                 color: colors.muted
                 font.pixelSize: 12
             }
@@ -1908,7 +1908,7 @@ ApplicationWindow {
 
                 Button {
                     Layout.fillWidth: true
-                    text: "Overwrite"
+                    text: qsTr("Overwrite")
                     onClicked: { folderController.confirmOverwrite("overwrite"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1923,7 +1923,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Overwrite All"
+                    text: qsTr("Overwrite All")
                     onClicked: { folderController.confirmOverwrite("overwriteAll"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1936,7 +1936,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Skip"
+                    text: qsTr("Skip")
                     onClicked: { folderController.confirmOverwrite("skip"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1949,7 +1949,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Skip All"
+                    text: qsTr("Skip All")
                     onClicked: { folderController.confirmOverwrite("skipAll"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1962,7 +1962,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Cancel"
+                    text: qsTr("Cancel")
                     onClicked: { folderController.confirmOverwrite("cancel"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -2148,7 +2148,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.leftMargin: 8
                     anchors.rightMargin: 8
-                    text: path.length > 0 ? path : "Drop folder here or click button"
+                    text: path.length > 0 ? path : qsTr("Drop folder here or click button")
                     color: path.length > 0 ? colors.text : colors.faint
                     elide: Text.ElideMiddle
                     font.family: window.monoFont
@@ -2173,7 +2173,7 @@ ApplicationWindow {
                     onDropped: function(drop) {
                         validationError = ""
                         if (!drop.hasUrls || drop.urls.length === 0) {
-                            validationError = "Drop a folder from your file manager."
+                            validationError = qsTr("Drop a folder from your file manager.")
                             return
                         }
 
@@ -2188,7 +2188,7 @@ ApplicationWindow {
                         }
 
                         if (!accepted) {
-                            validationError = "Dropped item is not a valid folder path."
+                            validationError = qsTr("Dropped item is not a valid folder path.")
                         }
                     }
                 }
