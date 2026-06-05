@@ -1518,47 +1518,135 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
 
-            ListView {
+            ColumnLayout {
                 visible: contentDiffDialog.textMode
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                model: contentDiffDialog.diffLines
-                clip: true
-                ScrollBar.vertical: ScrollBar {}
+                spacing: 0
 
-                delegate: Rectangle {
-                    required property var modelData
-                    width: ListView.view.width
-                    height: 18
-                    color: modelData.kind === 1 ? "#1e4a2a"     // insert (green-ish bg)
-                           : modelData.kind === 2 ? "#4a1e1e"   // delete (red-ish bg)
-                           : "transparent"
-
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 6
-                        spacing: 8
-                        Text {
-                            width: 50
-                            text: modelData.lineA > 0 ? modelData.lineA : ""
-                            color: colors.faint
+                // Column headers: A on the left pane, B on the right pane.
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        Layout.preferredHeight: 22
+                        color: colors.panelAlt
+                        border.color: colors.line
+                        border.width: 1
+                        Label {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            text: qsTr("A") + "  ·  " + contentDiffDialog.pathA
+                            color: colors.muted
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideMiddle
                             font.family: window.monoFont
                             font.pixelSize: 11
                         }
-                        Text {
-                            width: 50
-                            text: modelData.lineB > 0 ? modelData.lineB : ""
-                            color: colors.faint
+                    }
+                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: colors.line }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        Layout.preferredHeight: 22
+                        color: colors.panelAlt
+                        border.color: colors.line
+                        border.width: 1
+                        Label {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            text: qsTr("B") + "  ·  " + contentDiffDialog.pathB
+                            color: colors.muted
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideMiddle
                             font.family: window.monoFont
                             font.pixelSize: 11
                         }
-                        Text {
-                            width: parent.width - 130
-                            text: (modelData.kind === 1 ? "+ " : modelData.kind === 2 ? "- " : "  ") + modelData.text
-                            color: colors.text
-                            font.family: window.monoFont
-                            font.pixelSize: 11
-                            elide: Text.ElideRight
+                    }
+                }
+
+                ListView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: contentDiffDialog.diffLines
+                    clip: true
+                    ScrollBar.vertical: ScrollBar {}
+
+                    // kind: 0 = equal (both sides), 1 = insert (B only), 2 = delete (A only).
+                    delegate: Rectangle {
+                        id: diffRow
+                        required property var modelData
+                        width: ListView.view.width
+                        height: 18
+                        color: "transparent"
+                        readonly property real paneWidth: (width - 1) / 2
+                        readonly property color insertBg: window.darkMode ? "#16361f" : "#d8efde"
+                        readonly property color deleteBg: window.darkMode ? "#3b2323" : "#f6dada"
+
+                        Row {
+                            anchors.fill: parent
+
+                            // Left pane — A side (blank for inserts, tinted for deletes).
+                            Rectangle {
+                                width: diffRow.paneWidth
+                                height: parent.height
+                                color: diffRow.modelData.kind === 2 ? diffRow.deleteBg : "transparent"
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    spacing: 6
+                                    Text {
+                                        width: 40
+                                        text: diffRow.modelData.lineA > 0 ? diffRow.modelData.lineA : ""
+                                        color: colors.faint
+                                        horizontalAlignment: Text.AlignRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        width: parent.width - 52
+                                        text: diffRow.modelData.kind === 1 ? "" : diffRow.modelData.text
+                                        color: colors.text
+                                        elide: Text.ElideRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
+
+                            Rectangle { width: 1; height: parent.height; color: colors.line }
+
+                            // Right pane — B side (blank for deletes, tinted for inserts).
+                            Rectangle {
+                                width: diffRow.paneWidth
+                                height: parent.height
+                                color: diffRow.modelData.kind === 1 ? diffRow.insertBg : "transparent"
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    spacing: 6
+                                    Text {
+                                        width: 40
+                                        text: diffRow.modelData.lineB > 0 ? diffRow.modelData.lineB : ""
+                                        color: colors.faint
+                                        horizontalAlignment: Text.AlignRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        width: parent.width - 52
+                                        text: diffRow.modelData.kind === 2 ? "" : diffRow.modelData.text
+                                        color: colors.text
+                                        elide: Text.ElideRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
                         }
                     }
                 }
