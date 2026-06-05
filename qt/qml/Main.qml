@@ -78,6 +78,17 @@ ApplicationWindow {
         return 0
     }
 
+    // Plain-text (glyph-free) status for screen readers.
+    function statusDescription(s) {
+        if (s === 0) return qsTr("Matching")
+        if (s === 1) return qsTr("Changed")
+        if (s === 2) return qsTr("Only A")
+        if (s === 3) return qsTr("Only B")
+        if (s === 4) return qsTr("Folder (A)")
+        if (s === 5) return qsTr("Folder (B)")
+        return ""
+    }
+
     color: colors.bg
 
     readonly property bool isMac: Qt.platform.os === "osx"
@@ -283,6 +294,10 @@ ApplicationWindow {
                         enabled: !folderController.busy
                         onActivated: folderController.mode = currentIndex
 
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("How two files are judged equal:\n• Path + size — fastest\n• + modified time — also flags newer files\n• + checksum — Blake3, byte-exact content\n• Media metadata — image/video size, duration, codec\n• Perceptual hash — visually similar images")
+
                         contentItem: Text {
                             text: modeCombo.displayText
                             color: colors.text
@@ -349,6 +364,10 @@ ApplicationWindow {
                         enabled: !folderController.busy
                         onToggled: folderController.ignoreHiddenSystem = checked
 
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Skip dotfiles and OS clutter like .DS_Store, Thumbs.db, and desktop.ini.")
+
                         contentItem: Text {
                             text: hiddenCheck.text
                             color: colors.text
@@ -384,6 +403,10 @@ ApplicationWindow {
                         enabled: !folderController.busy
                         onToggled: folderController.followSymlinks = checked
 
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Follow symlinks that resolve inside the scanned folder; links pointing outside the root are skipped.")
+
                         contentItem: Text {
                             text: followSymlinksCheck.text
                             color: colors.text
@@ -417,6 +440,10 @@ ApplicationWindow {
                         checked: folderController.detectRenames
                         enabled: !folderController.busy
                         onToggled: folderController.detectRenames = checked
+
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Match moved/renamed files by content (size + checksum, or similar-image hash) in a post-scan pass.")
 
                         contentItem: Text {
                             text: detectRenamesCheck.text
@@ -978,6 +1005,35 @@ ApplicationWindow {
                             model: treeModel.flatItems
                             boundsBehavior: Flickable.StopAtBounds
                             spacing: 0
+                            focus: true
+                            currentIndex: -1
+                            keyNavigationEnabled: true
+                            keyNavigationWraps: false
+                            Accessible.role: Accessible.List
+
+                            // Keyboard: ↑/↓ move (ListView built-in), Space selects,
+                            // →/← expand/collapse, Enter expands a folder or selects a file.
+                            Keys.onPressed: function(event) {
+                                if (currentIndex < 0 || currentIndex >= treeModel.flatItems.length)
+                                    return
+                                var n = treeModel.flatItems[currentIndex]
+                                var sel = n.sourceRow !== undefined && n.sourceRow >= 0
+                                var canExpand = n.isFolder && n.children.length > 0
+                                if (event.key === Qt.Key_Space) {
+                                    if (sel) folderController.toggleRowSelection(n.sourceRow, event.modifiers)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Right) {
+                                    if (canExpand && !n.expanded) treeModel.toggleExpanded(n.relPath)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Left) {
+                                    if (canExpand && n.expanded) treeModel.toggleExpanded(n.relPath)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    if (canExpand) treeModel.toggleExpanded(n.relPath)
+                                    else if (sel) folderController.toggleRowSelection(n.sourceRow, event.modifiers)
+                                    event.accepted = true
+                                }
+                            }
 
                             delegate: Rectangle {
                                 required property int index
@@ -992,6 +1048,11 @@ ApplicationWindow {
                                 readonly property color selectColor: Qt.tint(baseColor, Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.30))
                                 implicitWidth: treeView.width
                                 implicitHeight: 30
+
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: node.name + ", " + window.statusDescription(node.status)
+                                Accessible.selectable: selectable
+                                Accessible.selected: selected
                                 color: selected ? selectColor : (hovered ? hoverColor : baseColor)
                                 border.color: selected ? colors.accent : colors.line
                                 border.width: 1
@@ -1006,6 +1067,16 @@ ApplicationWindow {
                                     width: 3
                                     visible: parent.selected
                                     color: colors.accent
+                                }
+
+                                // Keyboard-focus ring for the current row.
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "transparent"
+                                    border.color: colors.accent
+                                    border.width: 1
+                                    visible: treeView.activeFocus && index === treeView.currentIndex
+                                    z: 10
                                 }
 
                                 // Merged-tree row.
@@ -1199,6 +1270,8 @@ ApplicationWindow {
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: function(mouse) {
+                                        treeView.currentIndex = index
+                                        treeView.forceActiveFocus()
                                         const expandable = node.isFolder && node.children.length > 0
                                         if (mouse.button === Qt.RightButton) {
                                             // Select the row first so context-menu Copy/Move act on it.

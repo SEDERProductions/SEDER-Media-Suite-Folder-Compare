@@ -4,19 +4,19 @@
 <context>
     <name>Main</name>
     <message>
-        <location filename="../qml/Main.qml" line="+157"/>
-        <location line="+796"/>
+        <location filename="../qml/Main.qml" line="+168"/>
+        <location line="+812"/>
         <source>Folder A</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-788"/>
-        <location line="+798"/>
+        <location line="-804"/>
+        <location line="+814"/>
         <source>Folder B</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-781"/>
+        <location line="-797"/>
         <source>PROFILES</source>
         <translation type="unfinished"></translation>
     </message>
@@ -76,22 +76,22 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+71"/>
         <source>Ignore hidden/system files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+39"/>
         <source>Follow symlinks</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+38"/>
         <source>Detect renames</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+170"/>
         <source>Sync planner…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -108,56 +108,60 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+775"/>
+        <location line="+821"/>
         <source>Actions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-586"/>
-        <location line="+603"/>
+        <location line="-632"/>
+        <location line="+649"/>
         <source>Copy to A</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1328"/>
+        <location line="-1401"/>
         <source>All</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+617"/>
+        <location line="+17"/>
+        <location line="+627"/>
         <source>Matching</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-617"/>
-        <location line="+616"/>
-        <location line="+401"/>
+        <location line="-644"/>
+        <location line="+18"/>
+        <location line="+625"/>
+        <location line="+445"/>
         <source>Changed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1017"/>
-        <location line="+614"/>
-        <location line="+404"/>
+        <location line="-1088"/>
+        <location line="+19"/>
+        <location line="+622"/>
+        <location line="+448"/>
         <source>Only A</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1018"/>
-        <location line="+615"/>
-        <location line="+404"/>
+        <location line="-1089"/>
+        <location line="+20"/>
+        <location line="+622"/>
+        <location line="+448"/>
         <source>Only B</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1019"/>
-        <location line="+618"/>
+        <location line="-1090"/>
+        <location line="+645"/>
         <source>Folders</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-534"/>
+        <location line="-550"/>
         <source>01 / FOLDERS</source>
         <translation type="unfinished"></translation>
     </message>
@@ -177,12 +181,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+69"/>
         <source>03 / IGNORE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+142"/>
         <source>04 / THEME</source>
         <translation type="unfinished"></translation>
     </message>
@@ -263,34 +267,34 @@
     </message>
     <message>
         <location line="+4"/>
-        <location line="+586"/>
+        <location line="+632"/>
         <source>Copy to B</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-568"/>
+        <location line="-614"/>
         <source>Select items with content in A to copy to B</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+570"/>
+        <location line="+616"/>
         <source>Move to A</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-552"/>
+        <location line="-598"/>
         <source>Copy selected items from B to A, then delete originals</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+553"/>
+        <location line="+599"/>
         <source>Move to B</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-535"/>
+        <location line="-581"/>
         <source>Copy selected items from A to B, then delete originals</source>
         <translation type="unfinished"></translation>
     </message>
@@ -320,22 +324,49 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+189"/>
         <source>Match</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-1066"/>
+        <location line="+1070"/>
         <source>Folder (A)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1069"/>
+        <location line="+1070"/>
         <source>Folder (B)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+151"/>
+        <location line="-859"/>
+        <source>How two files are judged equal:
+• Path + size — fastest
+• + modified time — also flags newer files
+• + checksum — Blake3, byte-exact content
+• Media metadata — image/video size, duration, codec
+• Perceptual hash — visually similar images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Skip dotfiles and OS clutter like .DS_Store, Thumbs.db, and desktop.ini.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Follow symlinks that resolve inside the scanned folder; links pointing outside the root are skipped.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Match moved/renamed files by content (size + checksum, or similar-image hash) in a post-scan pass.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+865"/>
         <source>Comparison running...</source>
         <translation type="unfinished"></translation>
     </message>
