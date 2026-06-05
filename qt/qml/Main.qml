@@ -18,6 +18,8 @@ ApplicationWindow {
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
+    // Bumped on every selectionChanged so row delegates re-evaluate isRowSelected().
+    property int selectionRevision: 0
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
@@ -608,6 +610,54 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 0
 
+            // Error banner — surfaces the latest [ERROR] so failures aren't buried in the log.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: visible ? errorRow.implicitHeight + 16 : 0
+                visible: folderController.lastError.length > 0
+                color: window.darkMode ? "#3b2323" : "#f9e8e8"
+                border.color: colors.bad
+                border.width: 1
+
+                RowLayout {
+                    id: errorRow
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 8
+
+                    Label {
+                        text: "⚠"
+                        color: colors.bad
+                        font.pixelSize: 15
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: folderController.lastError
+                        color: window.darkMode ? "#ff9e9e" : "#8a1c1c"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 12
+                    }
+                    Button {
+                        text: "✕"
+                        Accessible.name: qsTr("Dismiss error")
+                        onClicked: folderController.clearLastError()
+                        background: Rectangle {
+                            radius: 4
+                            color: parent.down ? colors.accentDark : "transparent"
+                            border.color: colors.bad
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            color: window.darkMode ? "#ff9e9e" : "#8a1c1c"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+            }
+
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.max(metricsPanel.implicitHeight + 24, window.height * 0.2)
@@ -878,15 +928,29 @@ ApplicationWindow {
                                 required property var modelData
                                 readonly property var node: modelData
                                 readonly property bool hovered: rowMouse.containsMouse
+                                readonly property bool selectable: node.sourceRow !== undefined && node.sourceRow >= 0
+                                // Depend on selectionRevision so this re-evaluates when selection changes.
+                                readonly property bool selected: (window.selectionRevision, selectable && folderController.isRowSelected(node.sourceRow))
                                 readonly property color baseColor: index % 2 === 0 ? colors.panel : colors.panelAlt
                                 readonly property color hoverColor: window.darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
+                                readonly property color selectColor: Qt.tint(baseColor, Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.30))
                                 implicitWidth: treeView.width
                                 implicitHeight: 30
-                                color: hovered ? hoverColor : baseColor
-                                border.color: colors.line
+                                color: selected ? selectColor : (hovered ? hoverColor : baseColor)
+                                border.color: selected ? colors.accent : colors.line
                                 border.width: 1
 
                                 Behavior on color { ColorAnimation { duration: 90 } }
+
+                                // Accent bar marks selected rows without relying on color alone.
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: 3
+                                    visible: parent.selected
+                                    color: colors.accent
+                                }
 
                                 Row {
                                     anchors.fill: parent
@@ -899,11 +963,6 @@ ApplicationWindow {
                                             color: colors.muted
                                             font.pixelSize: 10
                                             visible: node.isFolder && node.children.length > 0
-                                        }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            enabled: node.isFolder && node.children.length > 0
-                                            onClicked: treeModel.toggleExpanded(node.relPath)
                                         }
                                     }
 
@@ -988,15 +1047,26 @@ ApplicationWindow {
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: function(mouse) {
-                                        if (node.isFolder && node.children.length > 0) {
-                                            treeModel.toggleExpanded(node.relPath)
-                                        }
+                                        const expandable = node.isFolder && node.children.length > 0
                                         if (mouse.button === Qt.RightButton) {
+                                            // Select the row first so context-menu Copy/Move act on it.
+                                            if (selectable && !folderController.isRowSelected(node.sourceRow)) {
+                                                folderController.toggleRowSelection(node.sourceRow, 0)
+                                            }
                                             contextMenu.targetRelPath = node.relPath
                                             contextMenu.targetIsFolder = node.isFolder
                                             contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4
                                             contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4
                                             contextMenu.popup()
+                                            return
+                                        }
+                                        // Left-click: the chevron column (x < 30) or a non-selectable
+                                        // synthetic folder toggles expansion; everything else selects,
+                                        // honouring Ctrl/Shift for multi-select.
+                                        if (expandable && (mouse.x < 30 || !selectable)) {
+                                            treeModel.toggleExpanded(node.relPath)
+                                        } else if (selectable) {
+                                            folderController.toggleRowSelection(node.sourceRow, mouse.modifiers)
                                         }
                                     }
                                 }
@@ -1117,9 +1187,9 @@ ApplicationWindow {
                             width: ListView.view.width
                             radius: 3
                             color: modelData.indexOf("[ERROR]") >= 0
-                                   ? (window.isDark ? "#3b2323" : "#f9e8e8")
+                                   ? (window.darkMode ? "#3b2323" : "#f9e8e8")
                                    : (modelData.indexOf("[WARN]") >= 0
-                                       ? (window.isDark ? "#3a321f" : "#fcf6df")
+                                       ? (window.darkMode ? "#3a321f" : "#fcf6df")
                                        : "transparent")
 
                             implicitHeight: logText.implicitHeight + 6
@@ -1133,9 +1203,9 @@ ApplicationWindow {
                                 anchors.rightMargin: 6
                                 text: modelData
                                 color: modelData.indexOf("[ERROR]") >= 0
-                                       ? (window.isDark ? "#ff9e9e" : "#8a1c1c")
+                                       ? (window.darkMode ? "#ff9e9e" : "#8a1c1c")
                                        : (modelData.indexOf("[WARN]") >= 0
-                                           ? (window.isDark ? "#ffd88a" : "#7a5a0f")
+                                           ? (window.darkMode ? "#ffd88a" : "#7a5a0f")
                                            : colors.text)
                                 elide: Text.ElideRight
                                 font.pixelSize: 11
@@ -1685,10 +1755,14 @@ ApplicationWindow {
         property var fullTree: []
         property var expandedPaths: ({})
         property var flatItems: []
+        property bool expandAll: false
 
         function rebuild() {
             fullTree = folderController.buildComparisonTree()
             expandedPaths = {}
+            // With a filter active, auto-expand so matching rows are visible
+            // without manual drilling; the unfiltered "All" view stays collapsed.
+            expandAll = window.activeFilter !== 0
             flattenTree()
         }
 
@@ -1718,7 +1792,8 @@ ApplicationWindow {
                         isFolder: node.isFolder,
                         children: node.children,
                         depth: depth,
-                        expanded: expandedPaths[node.relPath] !== undefined
+                        sourceRow: node.sourceRow !== undefined ? node.sourceRow : -1,
+                        expanded: expandAll || expandedPaths[node.relPath] !== undefined
                     })
                     if (items[items.length - 1].isFolder && node.children.length > 0 && items[items.length - 1].expanded) {
                         walk(node.children, depth + 1)
@@ -1733,6 +1808,20 @@ ApplicationWindow {
     Connections {
         target: folderController
         function onHasReportChanged() { if (folderController.hasReport) treeModel.rebuild() }
+    }
+
+    Connections {
+        target: folderController
+        // Rebuild the tree when the active filter changes so the filter buttons
+        // actually narrow the visible rows (the tree reads the filtered proxy).
+        function onFilterModeChanged() { if (folderController.hasReport) treeModel.rebuild() }
+    }
+
+    Connections {
+        target: folderController
+        // isRowSelected() is a plain method, not a bindable property; bumping this
+        // revision lets every visible row delegate re-evaluate its selected state.
+        function onSelectionChanged() { window.selectionRevision++ }
     }
 
     // ── FolderPicker component ──────────────────────────────────────────────

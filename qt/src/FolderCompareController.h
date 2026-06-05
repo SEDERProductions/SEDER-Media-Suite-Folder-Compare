@@ -47,6 +47,7 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
     Q_PROPERTY(bool effectiveDark READ effectiveDark NOTIFY effectiveDarkChanged)
     Q_PROPERTY(QStringList logEntries READ logEntries NOTIFY logEntriesChanged)
+    Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QObject* tableModel READ tableModel CONSTANT)
     Q_PROPERTY(QObject* filterModel READ filterModel CONSTANT)
     Q_PROPERTY(int matchingCount READ matchingCount NOTIFY summaryChanged)
@@ -93,6 +94,7 @@ class FolderCompareController final : public QObject {
     QString theme() const;
     bool effectiveDark() const;
     QStringList logEntries() const;
+    QString lastError() const;
     QObject* tableModel();
     QObject* filterModel();
     int matchingCount() const;
@@ -147,6 +149,7 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void exportCsv();
     Q_INVOKABLE void setFilterMode(int mode);
     Q_INVOKABLE void clearLog();
+    Q_INVOKABLE void clearLastError();
     Q_INVOKABLE QVariantMap parseDroppedFolderUrl(const QString& droppedUrl) const;
 
     Q_INVOKABLE void toggleRowSelection(int rowIndex, int modifiers);
@@ -188,6 +191,8 @@ class FolderCompareController final : public QObject {
     void themeChanged();
     void effectiveDarkChanged();
     void logEntriesChanged();
+    void lastErrorChanged();
+    void filterModeChanged();
     void summaryChanged();
     void hasReportChanged();
     void totalRowsChanged();
@@ -251,6 +256,7 @@ class FolderCompareController final : public QObject {
     QString m_progressText;
     QString m_theme;
     QStringList m_logEntries;
+    QString m_lastError;
     CompareResultTableModel m_tableModel;
     CompareFilterProxyModel m_filterModel;
     SfcReport* m_report = nullptr;

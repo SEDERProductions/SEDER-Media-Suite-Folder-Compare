@@ -443,11 +443,26 @@ void FolderCompareController::exportCsv() {
 
 void FolderCompareController::setFilterMode(int mode) {
     m_filterModel.setFilterMode(mode);
+    // The QML tree is built from buildComparisonTree(), which now reads the
+    // filtered proxy; tell the UI to rebuild so the filter actually applies.
+    emit filterModeChanged();
 }
 
 void FolderCompareController::clearLog() {
     m_logEntries.clear();
     emit logEntriesChanged();
+}
+
+QString FolderCompareController::lastError() const {
+    return m_lastError;
+}
+
+void FolderCompareController::clearLastError() {
+    if (m_lastError.isEmpty()) {
+        return;
+    }
+    m_lastError.clear();
+    emit lastErrorChanged();
 }
 
 QVariantMap FolderCompareController::parseDroppedFolderUrl(const QString& droppedUrl) const {
@@ -550,6 +565,10 @@ void FolderCompareController::handleFinished(SfcReport* report, const QString& e
     }
     m_report = report;
     m_tableModel.loadFromReport(m_report);
+    // Row indices change with every new report; drop any stale selection and
+    // clear a previous run's error banner before showing fresh results.
+    clearSelection();
+    clearLastError();
     emit totalRowsChanged();
     emit hasReportChanged();
     loadSummary(m_report);
@@ -607,6 +626,12 @@ void FolderCompareController::addLog(const QString& message, LogSeverity severit
         m_logEntries.removeLast();
     }
     emit logEntriesChanged();
+
+    // Surface the most recent error to the UI banner (untimestamped message only).
+    if (severity == LogSeverity::Error) {
+        m_lastError = message;
+        emit lastErrorChanged();
+    }
 }
 
 void FolderCompareController::resetSummary() {
@@ -1095,13 +1120,23 @@ QVariantList FolderCompareController::buildComparisonTree() const {
         QString checksumA;
         QString checksumB;
         bool isFolder = false;
+        int sourceRow = -1;
         QMap<QString, Node> children;
     };
 
     Node root;
     root.isFolder = true;
 
-    for (int i = 0; i < m_tableModel.totalRows(); ++i) {
+    // Iterate the FILTERED rows (via the proxy) so the active filter actually
+    // applies to the tree. Each proxy row is mapped back to its source row so the
+    // status/paths and the sourceRow handed to QML stay in source-model space —
+    // selection and transfers are keyed by source row.
+    const int filteredRows = m_filterModel.rowCount();
+    for (int p = 0; p < filteredRows; ++p) {
+        const int i = m_filterModel.mapToSource(m_filterModel.index(p, 0)).row();
+        if (i < 0) {
+            continue;
+        }
         const QString path = m_tableModel.relativePathForRow(i);
         const QStringList parts = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
         if (parts.isEmpty()) {
@@ -1123,6 +1158,7 @@ QVariantList FolderCompareController::buildComparisonTree() const {
 
         current->status = m_tableModel.statusForSourceRow(i);
         current->isFolder = m_tableModel.isFolderRow(i);
+        current->sourceRow = i;
 
         const int lastCol = m_tableModel.columnCount(QModelIndex()) - 1;
         const QModelIndex baseIdx = m_tableModel.index(i, 0);
@@ -1164,6 +1200,7 @@ QVariantList FolderCompareController::buildComparisonTree() const {
             item[QStringLiteral("checksumA")] = childNode.checksumA;
             item[QStringLiteral("checksumB")] = childNode.checksumB;
             item[QStringLiteral("isFolder")] = childNode.isFolder || !childNode.children.isEmpty();
+            item[QStringLiteral("sourceRow")] = childNode.sourceRow;
 
             QVariantList children;
             collect(childNode, children);
