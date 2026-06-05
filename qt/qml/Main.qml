@@ -20,6 +20,8 @@ ApplicationWindow {
     property int activeFilter: 0
     // Bumped on every selectionChanged so row delegates re-evaluate isRowSelected().
     property int selectionRevision: 0
+    // Merged tree vs. Beyond-Compare-style side-by-side A|B panes.
+    property bool dualPane: false
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
@@ -750,6 +752,31 @@ ApplicationWindow {
                                 ToolTip.text: "No results for this filter"
                             }
                         }
+
+                        Button {
+                            id: viewToggle
+                            Layout.preferredWidth: 96
+                            checkable: true
+                            checked: window.dualPane
+                            text: window.dualPane ? "▥ " + qsTr("Split") : "▤ " + qsTr("Merged")
+                            Accessible.name: qsTr("Toggle side-by-side A and B view")
+                            onClicked: window.dualPane = checked
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.checked ? colors.accent : colors.panelAlt
+                                border.color: parent.checked ? colors.accentDark : colors.line
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.checked ? "#fff7ee" : colors.text
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Switch between the merged tree and side-by-side A | B panes")
+                        }
                     }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: colors.line }
@@ -881,33 +908,62 @@ ApplicationWindow {
                     anchors.margins: 0
                     spacing: 0
 
+                    // Merged-tree header.
                     Row {
                         Layout.fillWidth: true
-                        height: 30
+                        Layout.preferredHeight: 30
+                        visible: !window.dualPane
                         Rectangle { width: 30; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
                         Rectangle {
                             width: parent.width - 250; height: 30; color: colors.panelAlt
                             border.color: colors.line; border.width: 1
                             Label {
-                                anchors.fill: parent; anchors.leftMargin: 8; text: "Name"
+                                anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Name")
                                 color: colors.muted; verticalAlignment: Text.AlignVCenter
                                 font.pixelSize: 12; font.family: window.monoFont
                             }
                         }
                         Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Size A"
+                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Size A")
                                 color: colors.muted; verticalAlignment: Text.AlignVCenter
                                 font.pixelSize: 12; font.family: window.monoFont }
                         }
                         Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Size B"
+                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Size B")
                                 color: colors.muted; verticalAlignment: Text.AlignVCenter
                                 font.pixelSize: 12; font.family: window.monoFont }
                         }
                         Rectangle { width: 90; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Status"
+                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Status")
                                 color: colors.muted; verticalAlignment: Text.AlignVCenter
                                 font.pixelSize: 12; font.family: window.monoFont }
+                        }
+                    }
+
+                    // Dual-pane (side-by-side) header.
+                    Row {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        visible: window.dualPane
+                        Rectangle { width: 30; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
+                        Rectangle {
+                            width: (parent.width - 58) / 2; height: 30; color: colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Label {
+                                anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Folder A")
+                                color: colors.muted; verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12; font.family: window.monoFont
+                            }
+                        }
+                        Rectangle { width: 28; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
+                        Rectangle {
+                            width: (parent.width - 58) / 2; height: 30; color: colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Label {
+                                anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Folder B")
+                                color: colors.muted; verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12; font.family: window.monoFont
+                            }
                         }
                     }
 
@@ -952,7 +1008,10 @@ ApplicationWindow {
                                     color: colors.accent
                                 }
 
+                                // Merged-tree row.
                                 Row {
+                                    id: mergedRow
+                                    visible: !window.dualPane
                                     anchors.fill: parent
 
                                     Item {
@@ -1037,6 +1096,99 @@ ApplicationWindow {
                                             }
                                             elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
                                             font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                    }
+                                }
+
+                                // Dual-pane (side-by-side) row, shown when split view is on.
+                                // Reuses the already-aligned A/B union: each row shows the A side
+                                // on the left and the B side on the right, greyed where absent.
+                                Row {
+                                    id: dualRow
+                                    visible: window.dualPane
+                                    anchors.fill: parent
+                                    readonly property int st: node.status
+                                    readonly property bool onA: st < 0 || st === 0 || st === 1 || st === 2 || st === 4
+                                    readonly property bool onB: st < 0 || st === 0 || st === 1 || st === 3 || st === 5
+                                    readonly property real paneW: (width - 58) / 2
+
+                                    Item {
+                                        width: 30; height: parent.height
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: node.isFolder ? (node.expanded ? "▼" : "▶") : ""
+                                            color: colors.muted
+                                            font.pixelSize: 10
+                                            visible: node.isFolder && node.children.length > 0
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: dualRow.paneW; height: parent.height; color: "transparent"
+                                        Text {
+                                            id: aSizeText
+                                            anchors.right: parent.right; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 64; horizontalAlignment: Text.AlignRight
+                                            text: node.sizeA || ""
+                                            color: colors.faint
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                        Text {
+                                            anchors.left: parent.left; anchors.leftMargin: 8 + node.depth * 16
+                                            anchors.right: aSizeText.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: dualRow.onA ? node.name : ""
+                                            color: dualRow.onA ? colors.text : colors.faint
+                                            elide: Text.ElideMiddle
+                                            font.pixelSize: 12; font.family: window.monoFont
+                                        }
+                                    }
+
+                                    Item {
+                                        width: 28; height: parent.height
+                                        Text {
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 12; font.family: window.monoFont
+                                            text: {
+                                                var s = dualRow.st
+                                                if (s === 0) return "="
+                                                if (s === 1) return "≠"
+                                                if (s === 2 || s === 4) return "▸"
+                                                if (s === 3 || s === 5) return "◂"
+                                                var a = node.aggregateStatus !== undefined ? node.aggregateStatus : -1
+                                                return a === 0 ? "=" : (a > 0 ? "≠" : "")
+                                            }
+                                            color: {
+                                                var s = dualRow.st
+                                                if (s === 0) return colors.good
+                                                if (s === 1) return colors.bad
+                                                if (s >= 2) return colors.warn
+                                                var a = node.aggregateStatus !== undefined ? node.aggregateStatus : -1
+                                                return a === 0 ? colors.good : (a > 0 ? colors.warn : colors.faint)
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: dualRow.paneW; height: parent.height; color: "transparent"
+                                        Text {
+                                            id: bSizeText
+                                            anchors.right: parent.right; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 64; horizontalAlignment: Text.AlignRight
+                                            text: node.sizeB || ""
+                                            color: colors.faint
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                        Text {
+                                            anchors.left: parent.left; anchors.leftMargin: 8 + node.depth * 16
+                                            anchors.right: bSizeText.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: dualRow.onB ? node.name : ""
+                                            color: dualRow.onB ? colors.text : colors.faint
+                                            elide: Text.ElideMiddle
+                                            font.pixelSize: 12; font.family: window.monoFont
                                         }
                                     }
                                 }
