@@ -18,6 +18,20 @@ ApplicationWindow {
 
     property bool darkMode: folderController.effectiveDark
     property int activeFilter: 0
+    // Bumped on every selectionChanged so row delegates re-evaluate isRowSelected().
+    property int selectionRevision: 0
+    // Merged tree vs. Beyond-Compare-style side-by-side A|B panes.
+    property bool dualPane: false
+    // Column sort: -1 = none, 0 = name, 1 = sizeA, 2 = sizeB, 3 = status.
+    property int sortCol: -1
+    property int sortOrder: Qt.AscendingOrder
+    // Resizable column widths (merged-tree view).
+    property real colSizeA: 80
+    property real colSizeB: 80
+    property real colStatus: 90
+
+    onSortColChanged: { if (treeModel.flatItems.length > 0) treeModel.flattenTree() }
+    onSortOrderChanged: { if (treeModel.flatItems.length > 0) treeModel.flattenTree() }
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
@@ -59,7 +73,7 @@ ApplicationWindow {
     }
 
     function filterLabel(index) {
-        return ["All", "Matching", "Changed", "Only A", "Only B", "Folders"][index]
+        return [qsTr("All"), qsTr("Matching"), qsTr("Changed"), qsTr("Only A"), qsTr("Only B"), qsTr("Folders")][index]
     }
 
     function filterCount(index) {
@@ -72,6 +86,17 @@ ApplicationWindow {
             case 5: return folderController.folderDiffCount
         }
         return 0
+    }
+
+    // Plain-text (glyph-free) status for screen readers.
+    function statusDescription(s) {
+        if (s === 0) return qsTr("Matching")
+        if (s === 1) return qsTr("Changed")
+        if (s === 2) return qsTr("Only A")
+        if (s === 3) return qsTr("Only B")
+        if (s === 4) return qsTr("Folder (A)")
+        if (s === 5) return qsTr("Folder (B)")
+        return ""
     }
 
     color: colors.bg
@@ -143,7 +168,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "01 / FOLDERS"
+                        text: qsTr("01 / FOLDERS")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -167,7 +192,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Open A: " + window.hintText("Ctrl+O") + "  •  Open B: " + window.hintText(window.openFolderBShortcut)
+                        text: qsTr("Open A: %1  •  Open B: %2").arg(window.hintText("Ctrl+O")).arg(window.hintText(window.openFolderBShortcut))
                         color: colors.muted
                         font.pixelSize: 11
                         font.family: window.monoFont
@@ -258,7 +283,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "02 / COMPARE MODE"
+                        text: qsTr("02 / COMPARE MODE")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -278,6 +303,10 @@ ApplicationWindow {
                         currentIndex: folderController.mode
                         enabled: !folderController.busy
                         onActivated: folderController.mode = currentIndex
+
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("How two files are judged equal:\n• Path + size — fastest\n• + modified time — also flags newer files\n• + checksum — Blake3, byte-exact content\n• Media metadata — image/video size, duration, codec\n• Perceptual hash — visually similar images")
 
                         contentItem: Text {
                             text: modeCombo.displayText
@@ -332,7 +361,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "03 / IGNORE"
+                        text: qsTr("03 / IGNORE")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -344,6 +373,10 @@ ApplicationWindow {
                         checked: folderController.ignoreHiddenSystem
                         enabled: !folderController.busy
                         onToggled: folderController.ignoreHiddenSystem = checked
+
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Skip dotfiles and OS clutter like .DS_Store, Thumbs.db, and desktop.ini.")
 
                         contentItem: Text {
                             text: hiddenCheck.text
@@ -380,6 +413,10 @@ ApplicationWindow {
                         enabled: !folderController.busy
                         onToggled: folderController.followSymlinks = checked
 
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Follow symlinks that resolve inside the scanned folder; links pointing outside the root are skipped.")
+
                         contentItem: Text {
                             text: followSymlinksCheck.text
                             color: colors.text
@@ -413,6 +450,10 @@ ApplicationWindow {
                         checked: folderController.detectRenames
                         enabled: !folderController.busy
                         onToggled: folderController.detectRenames = checked
+
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        ToolTip.text: qsTr("Match moved/renamed files by content (size + checksum, or similar-image hash) in a post-scan pass.")
 
                         contentItem: Text {
                             text: detectRenamesCheck.text
@@ -462,7 +503,7 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "04 / THEME"
+                        text: qsTr("04 / THEME")
                         color: colors.muted
                         font.pixelSize: 12
                         font.family: window.monoFont
@@ -530,7 +571,7 @@ ApplicationWindow {
                         Button {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
-                            text: "Export TXT (" + window.hintText(window.exportTxtShortcut) + ")"
+                            text: qsTr("Export TXT (%1)").arg(window.hintText(window.exportTxtShortcut))
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportTxt()
                             background: Rectangle {
@@ -547,12 +588,12 @@ ApplicationWindow {
                                 elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Run a comparison first"
+                            ToolTip.text: qsTr("Run a comparison first")
                         }
                         Button {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
-                            text: "Export CSV (" + window.hintText(window.exportCsvShortcut) + ")"
+                            text: qsTr("Export CSV (%1)").arg(window.hintText(window.exportCsvShortcut))
                             enabled: folderController.hasReport && !folderController.busy
                             onClicked: folderController.exportCsv()
                             background: Rectangle {
@@ -569,7 +610,7 @@ ApplicationWindow {
                                 elide: Text.ElideRight
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Run a comparison first"
+                            ToolTip.text: qsTr("Run a comparison first")
                         }
                     }
 
@@ -608,6 +649,54 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 0
 
+            // Error banner — surfaces the latest [ERROR] so failures aren't buried in the log.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: visible ? errorRow.implicitHeight + 16 : 0
+                visible: folderController.lastError.length > 0
+                color: window.darkMode ? "#3b2323" : "#f9e8e8"
+                border.color: colors.bad
+                border.width: 1
+
+                RowLayout {
+                    id: errorRow
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 8
+
+                    Label {
+                        text: "⚠"
+                        color: colors.bad
+                        font.pixelSize: 15
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: folderController.lastError
+                        color: window.darkMode ? "#ff9e9e" : "#8a1c1c"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 12
+                    }
+                    Button {
+                        text: "✕"
+                        Accessible.name: qsTr("Dismiss error")
+                        onClicked: folderController.clearLastError()
+                        background: Rectangle {
+                            radius: 4
+                            color: parent.down ? colors.accentDark : "transparent"
+                            border.color: colors.bad
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            color: window.darkMode ? "#ff9e9e" : "#8a1c1c"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+            }
+
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.max(metricsPanel.implicitHeight + 24, window.height * 0.2)
@@ -625,12 +714,12 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
-                        MetricBox { label: "Only A"; value: folderController.onlyACount; accent: colors.warn }
-                        MetricBox { label: "Only B"; value: folderController.onlyBCount; accent: colors.warn }
-                        MetricBox { label: "Changed"; value: folderController.changedCount; accent: colors.bad }
-                        MetricBox { label: "Matching"; value: folderController.matchingCount; accent: colors.good }
-                        MetricBox { label: "Folders"; value: folderController.folderDiffCount; accent: colors.faint }
-                        MetricBox { label: "Scanned"; value: folderController.totalSizeText; accent: colors.faint }
+                        MetricBox { label: qsTr("Only A"); value: folderController.onlyACount; accent: colors.warn }
+                        MetricBox { label: qsTr("Only B"); value: folderController.onlyBCount; accent: colors.warn }
+                        MetricBox { label: qsTr("Changed"); value: folderController.changedCount; accent: colors.bad }
+                        MetricBox { label: qsTr("Matching"); value: folderController.matchingCount; accent: colors.good }
+                        MetricBox { label: qsTr("Folders"); value: folderController.folderDiffCount; accent: colors.faint }
+                        MetricBox { label: qsTr("Scanned"); value: folderController.totalSizeText; accent: colors.faint }
                     }
 
                     RowLayout {
@@ -697,8 +786,33 @@ ApplicationWindow {
                                     font.pixelSize: 12
                                 }
                                 ToolTip.visible: hovered && !enabled
-                                ToolTip.text: "No results for this filter"
+                                ToolTip.text: qsTr("No results for this filter")
                             }
+                        }
+
+                        Button {
+                            id: viewToggle
+                            Layout.preferredWidth: 96
+                            checkable: true
+                            checked: window.dualPane
+                            text: window.dualPane ? "▥ " + qsTr("Split") : "▤ " + qsTr("Merged")
+                            Accessible.name: qsTr("Toggle side-by-side A and B view")
+                            onClicked: window.dualPane = checked
+                            background: Rectangle {
+                                radius: 5
+                                color: parent.checked ? colors.accent : colors.panelAlt
+                                border.color: parent.checked ? colors.accentDark : colors.line
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                color: parent.checked ? "#fff7ee" : colors.text
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: 12
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Switch between the merged tree and side-by-side A | B panes")
                         }
                     }
 
@@ -711,7 +825,7 @@ ApplicationWindow {
 
                         Button {
                             Layout.fillWidth: true
-                            text: "\u25C0 Copy to A"
+                            text: "\u25C0 " + qsTr("Copy to A")
                             enabled: folderController.canCopyToA
                             onClicked: folderController.copySelectedToA()
                             background: Rectangle {
@@ -729,11 +843,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Select items with content in B to copy to A"
+                            ToolTip.text: qsTr("Select items with content in B to copy to A")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Copy to B \u25B6"
+                            text: qsTr("Copy to B") + " \u25B6"
                             enabled: folderController.canCopyToB
                             onClicked: folderController.copySelectedToB()
                             background: Rectangle {
@@ -751,11 +865,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Select items with content in A to copy to B"
+                            ToolTip.text: qsTr("Select items with content in A to copy to B")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "\u25C0 Move to A"
+                            text: "\u25C0 " + qsTr("Move to A")
                             enabled: folderController.canMoveToA
                             onClicked: folderController.moveSelectedToA()
                             background: Rectangle {
@@ -773,11 +887,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Copy selected items from B to A, then delete originals"
+                            ToolTip.text: qsTr("Copy selected items from B to A, then delete originals")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Move to B \u25B6"
+                            text: qsTr("Move to B") + " \u25B6"
                             enabled: folderController.canMoveToB
                             onClicked: folderController.moveSelectedToB()
                             background: Rectangle {
@@ -795,11 +909,11 @@ ApplicationWindow {
                                 font.family: window.monoFont
                             }
                             ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Copy selected items from A to B, then delete originals"
+                            ToolTip.text: qsTr("Copy selected items from A to B, then delete originals")
                         }
                         Button {
                             Layout.fillWidth: true
-                            text: "Undo"
+                            text: qsTr("Undo")
                             enabled: folderController.canUndo
                             onClicked: folderController.undoLastTransfer()
                             background: Rectangle {
@@ -831,33 +945,206 @@ ApplicationWindow {
                     anchors.margins: 0
                     spacing: 0
 
+                    // Merged-tree header — sortable columns (click) + resizable (drag right edge).
                     Row {
                         Layout.fillWidth: true
-                        height: 30
+                        Layout.preferredHeight: 30
+                        visible: !window.dualPane
+
+                        // Chevron spacer (not sortable).
+                        Rectangle {
+                            width: 30; height: 30
+                            color: colors.panelAlt; border.color: colors.line; border.width: 1
+                        }
+
+                        // Name column — fills remaining width, click to sort.
+                        Rectangle {
+                            width: parent.width - 30 - window.colSizeA - window.colSizeB - window.colStatus
+                            height: 30
+                            color: window.sortCol === 0
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Name")
+                            MouseArea {
+                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 0) { window.sortCol = 0; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 4
+                                Label {
+                                    text: qsTr("Name"); height: parent.height
+                                    color: window.sortCol === 0 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 0
+                                }
+                                Label {
+                                    text: window.sortCol === 0 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 0 ? colors.accent : colors.faint
+                                }
+                            }
+                        }
+
+                        // Size A — sortable + drag-to-resize.
+                        Rectangle {
+                            width: window.colSizeA; height: 30
+                            color: window.sortCol === 1
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Size A")
+                            MouseArea {
+                                anchors.fill: parent; anchors.rightMargin: 6; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 1) { window.sortCol = 1; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 10; spacing: 4
+                                Label {
+                                    text: qsTr("Size A"); height: parent.height
+                                    color: window.sortCol === 1 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 1
+                                }
+                                Label {
+                                    text: window.sortCol === 1 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 1 ? colors.accent : colors.faint
+                                }
+                            }
+                            Rectangle {
+                                width: 6; height: parent.height; anchors.right: parent.right
+                                color: "transparent"; z: 10
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                                    property real _sx: 0; property real _sw: 0
+                                    onPressed: { _sx = mouseX; _sw = window.colSizeA }
+                                    onPositionChanged: if (pressed) window.colSizeA = Math.max(50, _sw + (mouseX - _sx))
+                                }
+                            }
+                        }
+
+                        // Size B — sortable + drag-to-resize.
+                        Rectangle {
+                            width: window.colSizeB; height: 30
+                            color: window.sortCol === 2
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Size B")
+                            MouseArea {
+                                anchors.fill: parent; anchors.rightMargin: 6; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 2) { window.sortCol = 2; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 10; spacing: 4
+                                Label {
+                                    text: qsTr("Size B"); height: parent.height
+                                    color: window.sortCol === 2 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 2
+                                }
+                                Label {
+                                    text: window.sortCol === 2 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 2 ? colors.accent : colors.faint
+                                }
+                            }
+                            Rectangle {
+                                width: 6; height: parent.height; anchors.right: parent.right
+                                color: "transparent"; z: 10
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                                    property real _sx: 0; property real _sw: 0
+                                    onPressed: { _sx = mouseX; _sw = window.colSizeB }
+                                    onPositionChanged: if (pressed) window.colSizeB = Math.max(50, _sw + (mouseX - _sx))
+                                }
+                            }
+                        }
+
+                        // Status — sortable + drag-to-resize.
+                        Rectangle {
+                            width: window.colStatus; height: 30
+                            color: window.sortCol === 3
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Status")
+                            MouseArea {
+                                anchors.fill: parent; anchors.rightMargin: 6; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 3) { window.sortCol = 3; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 10; spacing: 4
+                                Label {
+                                    text: qsTr("Status"); height: parent.height
+                                    color: window.sortCol === 3 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 3
+                                }
+                                Label {
+                                    text: window.sortCol === 3 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 3 ? colors.accent : colors.faint
+                                }
+                            }
+                            Rectangle {
+                                width: 6; height: parent.height; anchors.right: parent.right
+                                color: "transparent"; z: 10
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                                    property real _sx: 0; property real _sw: 0
+                                    onPressed: { _sx = mouseX; _sw = window.colStatus }
+                                    onPositionChanged: if (pressed) window.colStatus = Math.max(60, _sw + (mouseX - _sx))
+                                }
+                            }
+                        }
+                    }
+
+                    // Dual-pane (side-by-side) header.
+                    Row {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        visible: window.dualPane
                         Rectangle { width: 30; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
                         Rectangle {
-                            width: parent.width - 250; height: 30; color: colors.panelAlt
+                            width: (parent.width - 58) / 2; height: 30; color: colors.panelAlt
                             border.color: colors.line; border.width: 1
                             Label {
-                                anchors.fill: parent; anchors.leftMargin: 8; text: "Name"
+                                anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Folder A")
                                 color: colors.muted; verticalAlignment: Text.AlignVCenter
                                 font.pixelSize: 12; font.family: window.monoFont
                             }
                         }
-                        Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Size A"
+                        Rectangle { width: 28; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
+                        Rectangle {
+                            width: (parent.width - 58) / 2; height: 30; color: colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Label {
+                                anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Folder B")
                                 color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont }
-                        }
-                        Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Size B"
-                                color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont }
-                        }
-                        Rectangle { width: 90; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: "Status"
-                                color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont }
+                                font.pixelSize: 12; font.family: window.monoFont
+                            }
                         }
                     }
 
@@ -872,23 +1159,84 @@ ApplicationWindow {
                             model: treeModel.flatItems
                             boundsBehavior: Flickable.StopAtBounds
                             spacing: 0
+                            focus: true
+                            currentIndex: -1
+                            keyNavigationEnabled: true
+                            keyNavigationWraps: false
+                            Accessible.role: Accessible.List
+
+                            // Keyboard: ↑/↓ move (ListView built-in), Space selects,
+                            // →/← expand/collapse, Enter expands a folder or selects a file.
+                            Keys.onPressed: function(event) {
+                                if (currentIndex < 0 || currentIndex >= treeModel.flatItems.length)
+                                    return
+                                var n = treeModel.flatItems[currentIndex]
+                                var sel = n.sourceRow !== undefined && n.sourceRow >= 0
+                                var canExpand = n.isFolder && n.children.length > 0
+                                if (event.key === Qt.Key_Space) {
+                                    if (sel) folderController.toggleRowSelection(n.sourceRow, event.modifiers)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Right) {
+                                    if (canExpand && !n.expanded) treeModel.toggleExpanded(n.relPath)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Left) {
+                                    if (canExpand && n.expanded) treeModel.toggleExpanded(n.relPath)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    if (canExpand) treeModel.toggleExpanded(n.relPath)
+                                    else if (sel) folderController.toggleRowSelection(n.sourceRow, event.modifiers)
+                                    event.accepted = true
+                                }
+                            }
 
                             delegate: Rectangle {
                                 required property int index
                                 required property var modelData
                                 readonly property var node: modelData
                                 readonly property bool hovered: rowMouse.containsMouse
+                                readonly property bool selectable: node.sourceRow !== undefined && node.sourceRow >= 0
+                                // Depend on selectionRevision so this re-evaluates when selection changes.
+                                readonly property bool selected: (window.selectionRevision, selectable && folderController.isRowSelected(node.sourceRow))
                                 readonly property color baseColor: index % 2 === 0 ? colors.panel : colors.panelAlt
                                 readonly property color hoverColor: window.darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
+                                readonly property color selectColor: Qt.tint(baseColor, Qt.rgba(colors.accent.r, colors.accent.g, colors.accent.b, 0.30))
                                 implicitWidth: treeView.width
                                 implicitHeight: 30
-                                color: hovered ? hoverColor : baseColor
-                                border.color: colors.line
+
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: node.name + ", " + window.statusDescription(node.status)
+                                Accessible.selectable: selectable
+                                Accessible.selected: selected
+                                color: selected ? selectColor : (hovered ? hoverColor : baseColor)
+                                border.color: selected ? colors.accent : colors.line
                                 border.width: 1
 
                                 Behavior on color { ColorAnimation { duration: 90 } }
 
+                                // Accent bar marks selected rows without relying on color alone.
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: 3
+                                    visible: parent.selected
+                                    color: colors.accent
+                                }
+
+                                // Keyboard-focus ring for the current row.
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "transparent"
+                                    border.color: colors.accent
+                                    border.width: 1
+                                    visible: treeView.activeFocus && index === treeView.currentIndex
+                                    z: 10
+                                }
+
+                                // Merged-tree row.
                                 Row {
+                                    id: mergedRow
+                                    visible: !window.dualPane
                                     anchors.fill: parent
 
                                     Item {
@@ -900,15 +1248,10 @@ ApplicationWindow {
                                             font.pixelSize: 10
                                             visible: node.isFolder && node.children.length > 0
                                         }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            enabled: node.isFolder && node.children.length > 0
-                                            onClicked: treeModel.toggleExpanded(node.relPath)
-                                        }
                                     }
 
                                     Item {
-                                        width: parent.width - 250; height: parent.height
+                                        width: parent.width - 30 - window.colSizeA - window.colSizeB - window.colStatus; height: parent.height
                                         RowLayout {
                                             anchors.fill: parent; anchors.leftMargin: 6; spacing: 4
                                             Rectangle {
@@ -936,7 +1279,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle { width: 80; height: parent.height; color: "transparent"
+                                    Rectangle { width: window.colSizeA; height: parent.height; color: "transparent"
                                         Text {
                                             anchors.fill: parent; anchors.leftMargin: 8
                                             text: node.sizeA || ""
@@ -946,7 +1289,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle { width: 80; height: parent.height; color: "transparent"
+                                    Rectangle { width: window.colSizeB; height: parent.height; color: "transparent"
                                         Text {
                                             anchors.fill: parent; anchors.leftMargin: 8
                                             text: node.sizeB || ""
@@ -956,17 +1299,17 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle { width: 90; height: parent.height; color: "transparent"
+                                    Rectangle { width: window.colStatus; height: parent.height; color: "transparent"
                                         Text {
                                             anchors.fill: parent; anchors.leftMargin: 6
                                             text: {
                                                 var s = node.status
-                                                if (s === 0) return "\u2713 Match"
-                                                if (s === 1) return "\u2717 Changed"
-                                                if (s === 2) return "\u25B8 Only A"
-                                                if (s === 3) return "\u25B8 Only B"
-                                                if (s === 4) return "Folder (A)"
-                                                if (s === 5) return "Folder (B)"
+                                                if (s === 0) return "\u2713 " + qsTr("Match")
+                                                if (s === 1) return "\u2717 " + qsTr("Changed")
+                                                if (s === 2) return "\u25B8 " + qsTr("Only A")
+                                                if (s === 3) return "\u25B8 " + qsTr("Only B")
+                                                if (s === 4) return qsTr("Folder (A)")
+                                                if (s === 5) return qsTr("Folder (B)")
                                                 return ""
                                             }
                                             color: {
@@ -982,21 +1325,127 @@ ApplicationWindow {
                                     }
                                 }
 
+                                // Dual-pane (side-by-side) row, shown when split view is on.
+                                // Reuses the already-aligned A/B union: each row shows the A side
+                                // on the left and the B side on the right, greyed where absent.
+                                Row {
+                                    id: dualRow
+                                    visible: window.dualPane
+                                    anchors.fill: parent
+                                    readonly property int st: node.status
+                                    readonly property bool onA: st < 0 || st === 0 || st === 1 || st === 2 || st === 4
+                                    readonly property bool onB: st < 0 || st === 0 || st === 1 || st === 3 || st === 5
+                                    readonly property real paneW: (width - 58) / 2
+
+                                    Item {
+                                        width: 30; height: parent.height
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: node.isFolder ? (node.expanded ? "▼" : "▶") : ""
+                                            color: colors.muted
+                                            font.pixelSize: 10
+                                            visible: node.isFolder && node.children.length > 0
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: dualRow.paneW; height: parent.height; color: "transparent"
+                                        Text {
+                                            id: aSizeText
+                                            anchors.right: parent.right; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 64; horizontalAlignment: Text.AlignRight
+                                            text: node.sizeA || ""
+                                            color: colors.faint
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                        Text {
+                                            anchors.left: parent.left; anchors.leftMargin: 8 + node.depth * 16
+                                            anchors.right: aSizeText.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: dualRow.onA ? node.name : ""
+                                            color: dualRow.onA ? colors.text : colors.faint
+                                            elide: Text.ElideMiddle
+                                            font.pixelSize: 12; font.family: window.monoFont
+                                        }
+                                    }
+
+                                    Item {
+                                        width: 28; height: parent.height
+                                        Text {
+                                            anchors.centerIn: parent
+                                            font.pixelSize: 12; font.family: window.monoFont
+                                            text: {
+                                                var s = dualRow.st
+                                                if (s === 0) return "="
+                                                if (s === 1) return "≠"
+                                                if (s === 2 || s === 4) return "▸"
+                                                if (s === 3 || s === 5) return "◂"
+                                                var a = node.aggregateStatus !== undefined ? node.aggregateStatus : -1
+                                                return a === 0 ? "=" : (a > 0 ? "≠" : "")
+                                            }
+                                            color: {
+                                                var s = dualRow.st
+                                                if (s === 0) return colors.good
+                                                if (s === 1) return colors.bad
+                                                if (s >= 2) return colors.warn
+                                                var a = node.aggregateStatus !== undefined ? node.aggregateStatus : -1
+                                                return a === 0 ? colors.good : (a > 0 ? colors.warn : colors.faint)
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: dualRow.paneW; height: parent.height; color: "transparent"
+                                        Text {
+                                            id: bSizeText
+                                            anchors.right: parent.right; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 64; horizontalAlignment: Text.AlignRight
+                                            text: node.sizeB || ""
+                                            color: colors.faint
+                                            font.pixelSize: 11; font.family: window.monoFont
+                                        }
+                                        Text {
+                                            anchors.left: parent.left; anchors.leftMargin: 8 + node.depth * 16
+                                            anchors.right: bSizeText.left; anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: dualRow.onB ? node.name : ""
+                                            color: dualRow.onB ? colors.text : colors.faint
+                                            elide: Text.ElideMiddle
+                                            font.pixelSize: 12; font.family: window.monoFont
+                                        }
+                                    }
+                                }
+
                                 MouseArea {
                                     id: rowMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: function(mouse) {
-                                        if (node.isFolder && node.children.length > 0) {
-                                            treeModel.toggleExpanded(node.relPath)
-                                        }
+                                        treeView.currentIndex = index
+                                        treeView.forceActiveFocus()
+                                        const expandable = node.isFolder && node.children.length > 0
                                         if (mouse.button === Qt.RightButton) {
+                                            // Select the row first so context-menu Copy/Move act on it.
+                                            if (selectable && !folderController.isRowSelected(node.sourceRow)) {
+                                                folderController.toggleRowSelection(node.sourceRow, 0)
+                                            }
                                             contextMenu.targetRelPath = node.relPath
                                             contextMenu.targetIsFolder = node.isFolder
                                             contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4
                                             contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4
                                             contextMenu.popup()
+                                            return
+                                        }
+                                        // Left-click: the chevron column (x < 30) or a non-selectable
+                                        // synthetic folder toggles expansion; everything else selects,
+                                        // honouring Ctrl/Shift for multi-select.
+                                        if (expandable && (mouse.x < 30 || !selectable)) {
+                                            treeModel.toggleExpanded(node.relPath)
+                                        } else if (selectable) {
+                                            folderController.toggleRowSelection(node.sourceRow, mouse.modifiers)
                                         }
                                     }
                                 }
@@ -1013,7 +1462,7 @@ ApplicationWindow {
                             Label {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width - 80, 520)
-                                text: folderController.busy ? "Comparison running..." : "Choose two folders and start comparison."
+                                text: folderController.busy ? qsTr("Comparison running...") : qsTr("Choose two folders and start comparison.")
                                 color: colors.muted
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
@@ -1042,7 +1491,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: 8
                         Label {
-                            text: "STATUS"
+                            text: qsTr("STATUS")
                             color: colors.muted
                             font.pixelSize: 12
                             font.family: window.monoFont
@@ -1065,7 +1514,7 @@ ApplicationWindow {
                             }
                         }
                         Button {
-                            text: "Clear"
+                            text: qsTr("Clear")
                             onClicked: folderController.clearLog()
                             background: Rectangle {
                                 radius: 4
@@ -1117,9 +1566,9 @@ ApplicationWindow {
                             width: ListView.view.width
                             radius: 3
                             color: modelData.indexOf("[ERROR]") >= 0
-                                   ? (window.isDark ? "#3b2323" : "#f9e8e8")
+                                   ? (window.darkMode ? "#3b2323" : "#f9e8e8")
                                    : (modelData.indexOf("[WARN]") >= 0
-                                       ? (window.isDark ? "#3a321f" : "#fcf6df")
+                                       ? (window.darkMode ? "#3a321f" : "#fcf6df")
                                        : "transparent")
 
                             implicitHeight: logText.implicitHeight + 6
@@ -1133,9 +1582,9 @@ ApplicationWindow {
                                 anchors.rightMargin: 6
                                 text: modelData
                                 color: modelData.indexOf("[ERROR]") >= 0
-                                       ? (window.isDark ? "#ff9e9e" : "#8a1c1c")
+                                       ? (window.darkMode ? "#ff9e9e" : "#8a1c1c")
                                        : (modelData.indexOf("[WARN]") >= 0
-                                           ? (window.isDark ? "#ffd88a" : "#7a5a0f")
+                                           ? (window.darkMode ? "#ffd88a" : "#7a5a0f")
                                            : colors.text)
                                 elide: Text.ElideRight
                                 font.pixelSize: 11
@@ -1368,7 +1817,7 @@ ApplicationWindow {
                             width: 60
                             verticalAlignment: Text.AlignVCenter
                             height: parent.height
-                            text: ["Copy", "Delete", "Rename", "Skip"][modelData.kind] || ""
+                            text: [qsTr("Copy"), qsTr("Delete"), qsTr("Rename"), qsTr("Skip")][modelData.kind] || ""
                             color: modelData.kind === 1 ? colors.bad : colors.text
                             font.family: window.monoFont
                             font.pixelSize: 11
@@ -1448,47 +1897,135 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
 
-            ListView {
+            ColumnLayout {
                 visible: contentDiffDialog.textMode
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                model: contentDiffDialog.diffLines
-                clip: true
-                ScrollBar.vertical: ScrollBar {}
+                spacing: 0
 
-                delegate: Rectangle {
-                    required property var modelData
-                    width: ListView.view.width
-                    height: 18
-                    color: modelData.kind === 1 ? "#1e4a2a"     // insert (green-ish bg)
-                           : modelData.kind === 2 ? "#4a1e1e"   // delete (red-ish bg)
-                           : "transparent"
-
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 6
-                        spacing: 8
-                        Text {
-                            width: 50
-                            text: modelData.lineA > 0 ? modelData.lineA : ""
-                            color: colors.faint
+                // Column headers: A on the left pane, B on the right pane.
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        Layout.preferredHeight: 22
+                        color: colors.panelAlt
+                        border.color: colors.line
+                        border.width: 1
+                        Label {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            text: qsTr("A") + "  ·  " + contentDiffDialog.pathA
+                            color: colors.muted
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideMiddle
                             font.family: window.monoFont
                             font.pixelSize: 11
                         }
-                        Text {
-                            width: 50
-                            text: modelData.lineB > 0 ? modelData.lineB : ""
-                            color: colors.faint
+                    }
+                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: colors.line }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        Layout.preferredHeight: 22
+                        color: colors.panelAlt
+                        border.color: colors.line
+                        border.width: 1
+                        Label {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            text: qsTr("B") + "  ·  " + contentDiffDialog.pathB
+                            color: colors.muted
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideMiddle
                             font.family: window.monoFont
                             font.pixelSize: 11
                         }
-                        Text {
-                            width: parent.width - 130
-                            text: (modelData.kind === 1 ? "+ " : modelData.kind === 2 ? "- " : "  ") + modelData.text
-                            color: colors.text
-                            font.family: window.monoFont
-                            font.pixelSize: 11
-                            elide: Text.ElideRight
+                    }
+                }
+
+                ListView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: contentDiffDialog.diffLines
+                    clip: true
+                    ScrollBar.vertical: ScrollBar {}
+
+                    // kind: 0 = equal (both sides), 1 = insert (B only), 2 = delete (A only).
+                    delegate: Rectangle {
+                        id: diffRow
+                        required property var modelData
+                        width: ListView.view.width
+                        height: 18
+                        color: "transparent"
+                        readonly property real paneWidth: (width - 1) / 2
+                        readonly property color insertBg: window.darkMode ? "#16361f" : "#d8efde"
+                        readonly property color deleteBg: window.darkMode ? "#3b2323" : "#f6dada"
+
+                        Row {
+                            anchors.fill: parent
+
+                            // Left pane — A side (blank for inserts, tinted for deletes).
+                            Rectangle {
+                                width: diffRow.paneWidth
+                                height: parent.height
+                                color: diffRow.modelData.kind === 2 ? diffRow.deleteBg : "transparent"
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    spacing: 6
+                                    Text {
+                                        width: 40
+                                        text: diffRow.modelData.lineA > 0 ? diffRow.modelData.lineA : ""
+                                        color: colors.faint
+                                        horizontalAlignment: Text.AlignRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        width: parent.width - 52
+                                        text: diffRow.modelData.kind === 1 ? "" : diffRow.modelData.text
+                                        color: colors.text
+                                        elide: Text.ElideRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
+
+                            Rectangle { width: 1; height: parent.height; color: colors.line }
+
+                            // Right pane — B side (blank for deletes, tinted for inserts).
+                            Rectangle {
+                                width: diffRow.paneWidth
+                                height: parent.height
+                                color: diffRow.modelData.kind === 1 ? diffRow.insertBg : "transparent"
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    spacing: 6
+                                    Text {
+                                        width: 40
+                                        text: diffRow.modelData.lineB > 0 ? diffRow.modelData.lineB : ""
+                                        color: colors.faint
+                                        horizontalAlignment: Text.AlignRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        width: parent.width - 52
+                                        text: diffRow.modelData.kind === 2 ? "" : diffRow.modelData.text
+                                        color: colors.text
+                                        elide: Text.ElideRight
+                                        font.family: window.monoFont
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1531,7 +2068,7 @@ ApplicationWindow {
 
     Dialog {
         id: overwriteDialog
-        title: "File Already Exists"
+        title: qsTr("File Already Exists")
         standardButtons: Dialog.NoButton
         modal: true
         closePolicy: Popup.CloseOnEscape
@@ -1546,7 +2083,7 @@ ApplicationWindow {
             Layout.fillWidth: true
 
             Label {
-                text: "The destination already contains:"
+                text: qsTr("The destination already contains:")
                 font.bold: true
                 color: colors.text
             }
@@ -1566,7 +2103,7 @@ ApplicationWindow {
                 rowSpacing: 4
                 Layout.fillWidth: true
 
-                Label { text: "Source:"; color: colors.muted }
+                Label { text: qsTr("Source:"); color: colors.muted }
                 Label {
                     text: overwriteDialog.pendingInfo.sourceInfo ? overwriteDialog.pendingInfo.sourceInfo : ""
                     font.family: window.monoFont
@@ -1574,7 +2111,7 @@ ApplicationWindow {
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
-                Label { text: "Destination:"; color: colors.muted }
+                Label { text: qsTr("Destination:"); color: colors.muted }
                 Label {
                     text: overwriteDialog.pendingInfo.destInfo ? overwriteDialog.pendingInfo.destInfo : ""
                     font.family: window.monoFont
@@ -1587,7 +2124,7 @@ ApplicationWindow {
             Rectangle { height: 1; color: colors.line; Layout.fillWidth: true }
 
             Label {
-                text: "How do you want to proceed?"
+                text: qsTr("How do you want to proceed?")
                 color: colors.muted
                 font.pixelSize: 12
             }
@@ -1598,7 +2135,7 @@ ApplicationWindow {
 
                 Button {
                     Layout.fillWidth: true
-                    text: "Overwrite"
+                    text: qsTr("Overwrite")
                     onClicked: { folderController.confirmOverwrite("overwrite"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1613,7 +2150,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Overwrite All"
+                    text: qsTr("Overwrite All")
                     onClicked: { folderController.confirmOverwrite("overwriteAll"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1626,7 +2163,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Skip"
+                    text: qsTr("Skip")
                     onClicked: { folderController.confirmOverwrite("skip"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1639,7 +2176,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Skip All"
+                    text: qsTr("Skip All")
                     onClicked: { folderController.confirmOverwrite("skipAll"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1652,7 +2189,7 @@ ApplicationWindow {
                 }
                 Button {
                     Layout.fillWidth: true
-                    text: "Cancel"
+                    text: qsTr("Cancel")
                     onClicked: { folderController.confirmOverwrite("cancel"); overwriteDialog.close() }
                     background: Rectangle {
                         radius: 5
@@ -1685,10 +2222,14 @@ ApplicationWindow {
         property var fullTree: []
         property var expandedPaths: ({})
         property var flatItems: []
+        property bool expandAll: false
 
         function rebuild() {
             fullTree = folderController.buildComparisonTree()
             expandedPaths = {}
+            // With a filter active, auto-expand so matching rows are visible
+            // without manual drilling; the unfiltered "All" view stays collapsed.
+            expandAll = window.activeFilter !== 0
             flattenTree()
         }
 
@@ -1703,9 +2244,38 @@ ApplicationWindow {
 
         function flattenTree() {
             var items = []
+            // Sort siblings by the active column; folders always sort before files
+            // within the same parent so the tree hierarchy stays readable.
+            function sortedSiblings(nodes) {
+                if (window.sortCol < 0) return nodes
+                return nodes.slice().sort(function(a, b) {
+                    // Folders before files regardless of sort direction.
+                    var aIsDir = a.isFolder || (a.children && a.children.length > 0)
+                    var bIsDir = b.isFolder || (b.children && b.children.length > 0)
+                    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1
+                    var va, vb
+                    if (window.sortCol === 0) {
+                        va = a.name ? a.name.toLowerCase() : ""
+                        vb = b.name ? b.name.toLowerCase() : ""
+                    } else if (window.sortCol === 1) {
+                        va = a.sizeABytes || 0
+                        vb = b.sizeABytes || 0
+                    } else if (window.sortCol === 2) {
+                        va = a.sizeBBytes || 0
+                        vb = b.sizeBBytes || 0
+                    } else {
+                        va = a.status !== undefined ? a.status : -1
+                        vb = b.status !== undefined ? b.status : -1
+                    }
+                    if (va < vb) return window.sortOrder === Qt.AscendingOrder ? -1 : 1
+                    if (va > vb) return window.sortOrder === Qt.AscendingOrder ?  1 : -1
+                    return 0
+                })
+            }
             function walk(nodes, depth) {
-                for (var i = 0; i < nodes.length; i++) {
-                    var node = nodes[i]
+                var sorted = sortedSiblings(nodes)
+                for (var i = 0; i < sorted.length; i++) {
+                    var node = sorted[i]
                     items.push({
                         name: node.name,
                         relPath: node.relPath,
@@ -1713,12 +2283,15 @@ ApplicationWindow {
                         aggregateStatus: node.aggregateStatus,
                         sizeA: node.sizeA,
                         sizeB: node.sizeB,
+                        sizeABytes: node.sizeABytes || 0,
+                        sizeBBytes: node.sizeBBytes || 0,
                         checksumA: node.checksumA,
                         checksumB: node.checksumB,
                         isFolder: node.isFolder,
                         children: node.children,
                         depth: depth,
-                        expanded: expandedPaths[node.relPath] !== undefined
+                        sourceRow: node.sourceRow !== undefined ? node.sourceRow : -1,
+                        expanded: expandAll || expandedPaths[node.relPath] !== undefined
                     })
                     if (items[items.length - 1].isFolder && node.children.length > 0 && items[items.length - 1].expanded) {
                         walk(node.children, depth + 1)
@@ -1733,6 +2306,20 @@ ApplicationWindow {
     Connections {
         target: folderController
         function onHasReportChanged() { if (folderController.hasReport) treeModel.rebuild() }
+    }
+
+    Connections {
+        target: folderController
+        // Rebuild the tree when the active filter changes so the filter buttons
+        // actually narrow the visible rows (the tree reads the filtered proxy).
+        function onFilterModeChanged() { if (folderController.hasReport) treeModel.rebuild() }
+    }
+
+    Connections {
+        target: folderController
+        // isRowSelected() is a plain method, not a bindable property; bumping this
+        // revision lets every visible row delegate re-evaluate its selected state.
+        function onSelectionChanged() { window.selectionRevision++ }
     }
 
     // ── FolderPicker component ──────────────────────────────────────────────
@@ -1819,7 +2406,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.leftMargin: 8
                     anchors.rightMargin: 8
-                    text: path.length > 0 ? path : "Drop folder here or click button"
+                    text: path.length > 0 ? path : qsTr("Drop folder here or click button")
                     color: path.length > 0 ? colors.text : colors.faint
                     elide: Text.ElideMiddle
                     font.family: window.monoFont
@@ -1844,7 +2431,7 @@ ApplicationWindow {
                     onDropped: function(drop) {
                         validationError = ""
                         if (!drop.hasUrls || drop.urls.length === 0) {
-                            validationError = "Drop a folder from your file manager."
+                            validationError = qsTr("Drop a folder from your file manager.")
                             return
                         }
 
@@ -1859,7 +2446,7 @@ ApplicationWindow {
                         }
 
                         if (!accepted) {
-                            validationError = "Dropped item is not a valid folder path."
+                            validationError = qsTr("Dropped item is not a valid folder path.")
                         }
                     }
                 }

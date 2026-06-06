@@ -25,6 +25,8 @@ struct CompareRow {
     QString checksumB;
     int status = Changed;
     bool folder = false;
+    qulonglong sizeABytes = 0;
+    qulonglong sizeBBytes = 0;
 };
 
 class CompareResultTableModel final : public QAbstractTableModel {
@@ -40,7 +42,9 @@ class CompareResultTableModel final : public QAbstractTableModel {
         SizeBRole,
         ChecksumARole,
         ChecksumBRole,
-        IsFolderRole
+        IsFolderRole,
+        SizeABytesRole,
+        SizeBBytesRole
     };
 
     explicit CompareResultTableModel(QObject* parent = nullptr);
@@ -55,6 +59,8 @@ class CompareResultTableModel final : public QAbstractTableModel {
     int statusForSourceRow(int row) const;
     bool isFolderRow(int row) const;
     QString relativePathForRow(int row) const;
+    qulonglong sizeABytesForRow(int row) const;
+    qulonglong sizeBBytesForRow(int row) const;
 
     void clear();
     void loadFromReport(const SfcReport* report);
