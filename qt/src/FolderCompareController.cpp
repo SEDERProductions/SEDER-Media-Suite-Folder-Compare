@@ -1121,6 +1121,8 @@ QVariantList FolderCompareController::buildComparisonTree() const {
         QString checksumB;
         bool isFolder = false;
         int sourceRow = -1;
+        qulonglong sizeABytes = 0;
+        qulonglong sizeBBytes = 0;
         QMap<QString, Node> children;
     };
 
@@ -1159,6 +1161,8 @@ QVariantList FolderCompareController::buildComparisonTree() const {
         current->status = m_tableModel.statusForSourceRow(i);
         current->isFolder = m_tableModel.isFolderRow(i);
         current->sourceRow = i;
+        current->sizeABytes = m_tableModel.sizeABytesForRow(i);
+        current->sizeBBytes = m_tableModel.sizeBBytesForRow(i);
 
         const int lastCol = m_tableModel.columnCount(QModelIndex()) - 1;
         const QModelIndex baseIdx = m_tableModel.index(i, 0);
@@ -1197,6 +1201,8 @@ QVariantList FolderCompareController::buildComparisonTree() const {
             item[QStringLiteral("status")] = childNode.status;
             item[QStringLiteral("sizeA")] = childNode.sizeA;
             item[QStringLiteral("sizeB")] = childNode.sizeB;
+            item[QStringLiteral("sizeABytes")] = childNode.sizeABytes;
+            item[QStringLiteral("sizeBBytes")] = childNode.sizeBBytes;
             item[QStringLiteral("checksumA")] = childNode.checksumA;
             item[QStringLiteral("checksumB")] = childNode.checksumB;
             item[QStringLiteral("isFolder")] = childNode.isFolder || !childNode.children.isEmpty();

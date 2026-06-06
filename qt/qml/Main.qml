@@ -22,6 +22,16 @@ ApplicationWindow {
     property int selectionRevision: 0
     // Merged tree vs. Beyond-Compare-style side-by-side A|B panes.
     property bool dualPane: false
+    // Column sort: -1 = none, 0 = name, 1 = sizeA, 2 = sizeB, 3 = status.
+    property int sortCol: -1
+    property int sortOrder: Qt.AscendingOrder
+    // Resizable column widths (merged-tree view).
+    property real colSizeA: 80
+    property real colSizeB: 80
+    property real colStatus: 90
+
+    onSortColChanged: { if (treeModel.flatItems.length > 0) treeModel.flattenTree() }
+    onSortOrderChanged: { if (treeModel.flatItems.length > 0) treeModel.flattenTree() }
     readonly property string monoFont: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
     readonly property string uiFont: "Manrope, Segoe UI, sans-serif"
     readonly property bool showChecksums: folderController.mode === 2
@@ -935,35 +945,179 @@ ApplicationWindow {
                     anchors.margins: 0
                     spacing: 0
 
-                    // Merged-tree header.
+                    // Merged-tree header — sortable columns (click) + resizable (drag right edge).
                     Row {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 30
                         visible: !window.dualPane
-                        Rectangle { width: 30; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1 }
+
+                        // Chevron spacer (not sortable).
                         Rectangle {
-                            width: parent.width - 250; height: 30; color: colors.panelAlt
+                            width: 30; height: 30
+                            color: colors.panelAlt; border.color: colors.line; border.width: 1
+                        }
+
+                        // Name column — fills remaining width, click to sort.
+                        Rectangle {
+                            width: parent.width - 30 - window.colSizeA - window.colSizeB - window.colStatus
+                            height: 30
+                            color: window.sortCol === 0
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
                             border.color: colors.line; border.width: 1
-                            Label {
-                                anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Name")
-                                color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Name")
+                            MouseArea {
+                                anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 0) { window.sortCol = 0; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 4
+                                Label {
+                                    text: qsTr("Name"); height: parent.height
+                                    color: window.sortCol === 0 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 0
+                                }
+                                Label {
+                                    text: window.sortCol === 0 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 0 ? colors.accent : colors.faint
+                                }
                             }
                         }
-                        Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Size A")
-                                color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont }
+
+                        // Size A — sortable + drag-to-resize.
+                        Rectangle {
+                            width: window.colSizeA; height: 30
+                            color: window.sortCol === 1
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Size A")
+                            MouseArea {
+                                anchors.fill: parent; anchors.rightMargin: 6; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 1) { window.sortCol = 1; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 10; spacing: 4
+                                Label {
+                                    text: qsTr("Size A"); height: parent.height
+                                    color: window.sortCol === 1 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 1
+                                }
+                                Label {
+                                    text: window.sortCol === 1 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 1 ? colors.accent : colors.faint
+                                }
+                            }
+                            Rectangle {
+                                width: 6; height: parent.height; anchors.right: parent.right
+                                color: "transparent"; z: 10
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                                    property real _sx: 0; property real _sw: 0
+                                    onPressed: { _sx = mouseX; _sw = window.colSizeA }
+                                    onPositionChanged: if (pressed) window.colSizeA = Math.max(50, _sw + (mouseX - _sx))
+                                }
+                            }
                         }
-                        Rectangle { width: 80; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Size B")
-                                color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont }
+
+                        // Size B — sortable + drag-to-resize.
+                        Rectangle {
+                            width: window.colSizeB; height: 30
+                            color: window.sortCol === 2
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Size B")
+                            MouseArea {
+                                anchors.fill: parent; anchors.rightMargin: 6; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 2) { window.sortCol = 2; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 10; spacing: 4
+                                Label {
+                                    text: qsTr("Size B"); height: parent.height
+                                    color: window.sortCol === 2 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 2
+                                }
+                                Label {
+                                    text: window.sortCol === 2 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 2 ? colors.accent : colors.faint
+                                }
+                            }
+                            Rectangle {
+                                width: 6; height: parent.height; anchors.right: parent.right
+                                color: "transparent"; z: 10
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                                    property real _sx: 0; property real _sw: 0
+                                    onPressed: { _sx = mouseX; _sw = window.colSizeB }
+                                    onPositionChanged: if (pressed) window.colSizeB = Math.max(50, _sw + (mouseX - _sx))
+                                }
+                            }
                         }
-                        Rectangle { width: 90; height: 30; color: colors.panelAlt; border.color: colors.line; border.width: 1
-                            Label { anchors.fill: parent; anchors.leftMargin: 8; text: qsTr("Status")
-                                color: colors.muted; verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12; font.family: window.monoFont }
+
+                        // Status — sortable + drag-to-resize.
+                        Rectangle {
+                            width: window.colStatus; height: 30
+                            color: window.sortCol === 3
+                                   ? Qt.tint(colors.panelAlt, Qt.rgba(0.78, 0.23, 0.07, 0.10))
+                                   : colors.panelAlt
+                            border.color: colors.line; border.width: 1
+                            Accessible.role: Accessible.ColumnHeader
+                            Accessible.name: qsTr("Sort by Status")
+                            MouseArea {
+                                anchors.fill: parent; anchors.rightMargin: 6; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (window.sortCol !== 3) { window.sortCol = 3; window.sortOrder = Qt.AscendingOrder }
+                                    else if (window.sortOrder === Qt.AscendingOrder) { window.sortOrder = Qt.DescendingOrder }
+                                    else { window.sortCol = -1 }
+                                }
+                            }
+                            Row {
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 10; spacing: 4
+                                Label {
+                                    text: qsTr("Status"); height: parent.height
+                                    color: window.sortCol === 3 ? colors.accent : colors.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 12; font.family: window.monoFont; font.bold: window.sortCol === 3
+                                }
+                                Label {
+                                    text: window.sortCol === 3 ? (window.sortOrder === Qt.AscendingOrder ? "▲" : "▼") : "◆"
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter; font.pixelSize: 8
+                                    color: window.sortCol === 3 ? colors.accent : colors.faint
+                                }
+                            }
+                            Rectangle {
+                                width: 6; height: parent.height; anchors.right: parent.right
+                                color: "transparent"; z: 10
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                                    property real _sx: 0; property real _sw: 0
+                                    onPressed: { _sx = mouseX; _sw = window.colStatus }
+                                    onPositionChanged: if (pressed) window.colStatus = Math.max(60, _sw + (mouseX - _sx))
+                                }
+                            }
                         }
                     }
 
@@ -1097,7 +1251,7 @@ ApplicationWindow {
                                     }
 
                                     Item {
-                                        width: parent.width - 250; height: parent.height
+                                        width: parent.width - 30 - window.colSizeA - window.colSizeB - window.colStatus; height: parent.height
                                         RowLayout {
                                             anchors.fill: parent; anchors.leftMargin: 6; spacing: 4
                                             Rectangle {
@@ -1125,7 +1279,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle { width: 80; height: parent.height; color: "transparent"
+                                    Rectangle { width: window.colSizeA; height: parent.height; color: "transparent"
                                         Text {
                                             anchors.fill: parent; anchors.leftMargin: 8
                                             text: node.sizeA || ""
@@ -1135,7 +1289,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle { width: 80; height: parent.height; color: "transparent"
+                                    Rectangle { width: window.colSizeB; height: parent.height; color: "transparent"
                                         Text {
                                             anchors.fill: parent; anchors.leftMargin: 8
                                             text: node.sizeB || ""
@@ -1145,7 +1299,7 @@ ApplicationWindow {
                                         }
                                     }
 
-                                    Rectangle { width: 90; height: parent.height; color: "transparent"
+                                    Rectangle { width: window.colStatus; height: parent.height; color: "transparent"
                                         Text {
                                             anchors.fill: parent; anchors.leftMargin: 6
                                             text: {
@@ -2090,9 +2244,38 @@ ApplicationWindow {
 
         function flattenTree() {
             var items = []
+            // Sort siblings by the active column; folders always sort before files
+            // within the same parent so the tree hierarchy stays readable.
+            function sortedSiblings(nodes) {
+                if (window.sortCol < 0) return nodes
+                return nodes.slice().sort(function(a, b) {
+                    // Folders before files regardless of sort direction.
+                    var aIsDir = a.isFolder || (a.children && a.children.length > 0)
+                    var bIsDir = b.isFolder || (b.children && b.children.length > 0)
+                    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1
+                    var va, vb
+                    if (window.sortCol === 0) {
+                        va = a.name ? a.name.toLowerCase() : ""
+                        vb = b.name ? b.name.toLowerCase() : ""
+                    } else if (window.sortCol === 1) {
+                        va = a.sizeABytes || 0
+                        vb = b.sizeABytes || 0
+                    } else if (window.sortCol === 2) {
+                        va = a.sizeBBytes || 0
+                        vb = b.sizeBBytes || 0
+                    } else {
+                        va = a.status !== undefined ? a.status : -1
+                        vb = b.status !== undefined ? b.status : -1
+                    }
+                    if (va < vb) return window.sortOrder === Qt.AscendingOrder ? -1 : 1
+                    if (va > vb) return window.sortOrder === Qt.AscendingOrder ?  1 : -1
+                    return 0
+                })
+            }
             function walk(nodes, depth) {
-                for (var i = 0; i < nodes.length; i++) {
-                    var node = nodes[i]
+                var sorted = sortedSiblings(nodes)
+                for (var i = 0; i < sorted.length; i++) {
+                    var node = sorted[i]
                     items.push({
                         name: node.name,
                         relPath: node.relPath,
@@ -2100,6 +2283,8 @@ ApplicationWindow {
                         aggregateStatus: node.aggregateStatus,
                         sizeA: node.sizeA,
                         sizeB: node.sizeB,
+                        sizeABytes: node.sizeABytes || 0,
+                        sizeBBytes: node.sizeBBytes || 0,
                         checksumA: node.checksumA,
                         checksumB: node.checksumB,
                         isFolder: node.isFolder,

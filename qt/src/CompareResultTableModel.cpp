@@ -84,6 +84,10 @@ QVariant CompareResultTableModel::data(const QModelIndex& index, int role) const
         return row.checksumB;
     case IsFolderRole:
         return row.folder;
+    case SizeABytesRole:
+        return row.sizeABytes;
+    case SizeBBytesRole:
+        return row.sizeBBytes;
     default:
         return {};
     }
@@ -123,6 +127,8 @@ QHash<int, QByteArray> CompareResultTableModel::roleNames() const {
         {ChecksumARole, "checksumA"},
         {ChecksumBRole, "checksumB"},
         {IsFolderRole, "isFolder"},
+        {SizeABytesRole, "sizeABytes"},
+        {SizeBBytesRole, "sizeBBytes"},
     };
 }
 
@@ -149,6 +155,20 @@ QString CompareResultTableModel::relativePathForRow(int row) const {
         return {};
     }
     return m_rows.at(row).relativePath;
+}
+
+qulonglong CompareResultTableModel::sizeABytesForRow(int row) const {
+    if (row < 0 || row >= m_rows.size()) {
+        return 0;
+    }
+    return m_rows.at(row).sizeABytes;
+}
+
+qulonglong CompareResultTableModel::sizeBBytesForRow(int row) const {
+    if (row < 0 || row >= m_rows.size()) {
+        return 0;
+    }
+    return m_rows.at(row).sizeBBytes;
 }
 
 void CompareResultTableModel::updateRowStatus(int row, CompareRow::Status newStatus) {
@@ -192,6 +212,8 @@ void CompareResultTableModel::loadFromReport(const SfcReport* report) {
             row.statusLabel = statusLabel(row.status);
             row.sizeA = formatBytes(rowData.size_a_present, rowData.size_a);
             row.sizeB = formatBytes(rowData.size_b_present, rowData.size_b);
+            row.sizeABytes = rowData.size_a_present ? rowData.size_a : 0;
+            row.sizeBBytes = rowData.size_b_present ? rowData.size_b : 0;
             row.checksumA = fromCString(rowData.checksum_a);
             row.checksumB = fromCString(rowData.checksum_b);
             rows.push_back(row);
