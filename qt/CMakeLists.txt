@@ -8,7 +8,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Test LinguistTools)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Test LinguistTools)
+
+# Opt into the modern qt_add_qml_module resource layout (RESOURCE_PREFIX
+# /qt/qml). The module is statically linked into the executable and loaded via
+# QQmlApplicationEngine::loadFromModule, so this policy only affects where the
+# compiled QML is placed in the binary's resources.
+if(POLICY QTP0001)
+    cmake_policy(SET QTP0001 NEW)
+endif()
 
 set(RUST_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/../Cargo.toml")
 set(RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-target")
@@ -77,10 +85,24 @@ qt_add_resources(seder-folder-compare-qt icon_resources
         "../assets/icon.svg"
 )
 
-qt_add_resources(seder-folder-compare-qt qml_resources
-    PREFIX "/"
-    FILES
-        "qml/Main.qml"
+# The QML front end is a proper module (URI "Seder.UI"). Theme is a singleton
+# design-token object; the rest are reusable components and panels. New QML
+# files must be added to QML_FILES below to be compiled into the module.
+set_source_files_properties(qml/theme/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+qt_add_qml_module(seder-folder-compare-qt
+    URI Seder.UI
+    VERSION 1.0
+    QML_FILES
+        qml/Main.qml
+        qml/theme/Theme.qml
+        qml/components/AppButton.qml
+        qml/components/AppComboBox.qml
+        qml/components/AppCheckBox.qml
+        qml/components/AppTextField.qml
+        qml/components/SectionLabel.qml
+        qml/components/MetricBox.qml
+        qml/components/FolderPicker.qml
 )
 
 # ── Translations ─────────────────────────────────────────────────────────────

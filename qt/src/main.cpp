@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("folderController"), &controller);
-    engine.load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
+    engine.loadFromModule("Seder.UI", "Main");
     if (engine.rootObjects().isEmpty()) {
         return 1;
     }
