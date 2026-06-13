@@ -8,6 +8,10 @@ import QtQuick
 // radius, type size, motion duration and elevation depth is resolved here so
 // that components never hardcode style. `dark` is bound once in Main.qml to
 // folderController.effectiveDark; all theme-dependent tokens react to it.
+//
+// Token groups use concrete inline-component types (SpacingTokens, etc.) rather
+// than a bare QtObject so that accesses like Theme.space.md stay statically
+// typed for qmllint and can be compiled by qmlcachegen.
 QtObject {
     id: theme
 
@@ -49,7 +53,7 @@ QtObject {
     readonly property color diffDeleteBg: dark ? "#4a1e1e" : "#f6dada"
 
     // ── Spacing scale (4 / 8 grid) ─────────────────────────────────────────
-    readonly property QtObject space: QtObject {
+    component SpacingTokens: QtObject {
         readonly property int xs: 4
         readonly property int sm: 8
         readonly property int md: 12
@@ -57,17 +61,19 @@ QtObject {
         readonly property int xl: 24
         readonly property int xxl: 32
     }
+    readonly property SpacingTokens space: SpacingTokens {}
 
     // ── Corner radii ───────────────────────────────────────────────────────
-    readonly property QtObject radius: QtObject {
+    component RadiusTokens: QtObject {
         readonly property int sm: 4
         readonly property int md: 6
         readonly property int lg: 10
         readonly property int pill: 999
     }
+    readonly property RadiusTokens radius: RadiusTokens {}
 
     // ── Typography ────────────────────────────────────────────────────────
-    readonly property QtObject typography: QtObject {
+    component TypographyTokens: QtObject {
         readonly property string ui: "Manrope, Segoe UI, sans-serif"
         readonly property string mono: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "monospace")
         readonly property int caption: 11
@@ -76,22 +82,25 @@ QtObject {
         readonly property int title: 17
         readonly property int display: 22
     }
+    readonly property TypographyTokens typography: TypographyTokens {}
 
     // ── Motion ────────────────────────────────────────────────────────────
-    readonly property QtObject motion: QtObject {
+    component MotionTokens: QtObject {
         readonly property int fast: 90
         readonly property int base: 160
         readonly property int slow: 240
         readonly property int easeStandard: Easing.OutCubic
         readonly property int easeEmphasized: Easing.OutBack
     }
+    readonly property MotionTokens motion: MotionTokens {}
 
     // ── Elevation (shadow depths consumed via Elevation.qml from Phase D) ──
-    readonly property QtObject elevation: QtObject {
+    component ElevationTokens: QtObject {
         readonly property real e1: 8
         readonly property real e2: 18
         readonly property real e3: 32
     }
+    readonly property ElevationTokens elevation: ElevationTokens {}
 
     // ── Status helpers (moved out of Main.qml so panels can share them) ────
     function statusColor(statusCode) {
