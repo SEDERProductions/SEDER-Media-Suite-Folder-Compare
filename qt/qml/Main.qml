@@ -24,7 +24,7 @@ ApplicationWindow {
     readonly property int leftRailWidth: Math.max(300, Math.min(420, Math.round(width * railWidthRatio)))
     readonly property string appVersionLabel: Qt.application.version && Qt.application.version.length > 0 ? Qt.application.version : ""
 
-    color: Theme.bg
+    color: Theme.gutter
 
     // Drive the global design-token theme from the controller's resolved mode.
     Binding {
@@ -90,19 +90,35 @@ ApplicationWindow {
         onActivated: folderController.exportCsv()
     }
 
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
-
+    // Shared themed split handle (gutter strip that lights up on hover/drag).
+    Component {
+        id: splitHandle
         Rectangle {
-            Layout.fillHeight: true
-            Layout.preferredWidth: window.leftRailWidth
-            Layout.minimumWidth: 280
-            visible: true
-            color: Theme.panel
-            border.color: Theme.line
-            border.width: 1
-            clip: true
+            implicitWidth: 6
+            implicitHeight: 6
+            color: SplitHandle.pressed ? Theme.accent : (SplitHandle.hovered ? Qt.lighter(Theme.gutter, 1.6) : Theme.gutter)
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.motion.fast
+                }
+            }
+        }
+    }
+
+    // ── Dockable workspace ────────────────────────────────────────────────
+    SplitView {
+        id: workspace
+        anchors.fill: parent
+        orientation: Qt.Horizontal
+        handle: splitHandle
+
+        DockPanel {
+            id: settingsPanel
+            title: qsTr("SETTINGS")
+            iconName: "settings"
+            SplitView.preferredWidth: window.leftRailWidth
+            SplitView.minimumWidth: 280
+            SplitView.maximumWidth: 520
 
             ScrollView {
                 id: sidebarScroll
@@ -351,535 +367,542 @@ ApplicationWindow {
             }
         }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 0
+        SplitView {
+            id: rightColumn
+            orientation: Qt.Vertical
+            handle: splitHandle
+            SplitView.fillWidth: true
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(metricsPanel.implicitHeight + 24, window.height * 0.2)
-                Layout.minimumHeight: metricsPanel.implicitHeight + 24
-                color: Theme.bg
-                border.color: Theme.line
-                border.width: 1
+            DockPanel {
+                id: resultsPanel
+                title: qsTr("RESULTS")
+                iconName: "folder-tree"
+                SplitView.fillHeight: true
+                SplitView.minimumHeight: 200
 
                 ColumnLayout {
-                    id: metricsPanel
                     anchors.fill: parent
-                    anchors.margins: Theme.space.lg
-                    spacing: Theme.space.md
+                    spacing: 0
 
-                    RowLayout {
+                    // Metrics + filters + transfer toolbar
+                    ColumnLayout {
+                        id: metricsPanel
                         Layout.fillWidth: true
-                        spacing: 10
-                        MetricBox {
-                            label: "Only A"
-                            value: folderController.onlyACount
-                            accent: Theme.warn
-                        }
-                        MetricBox {
-                            label: "Only B"
-                            value: folderController.onlyBCount
-                            accent: Theme.warn
-                        }
-                        MetricBox {
-                            label: "Changed"
-                            value: folderController.changedCount
-                            accent: Theme.bad
-                        }
-                        MetricBox {
-                            label: "Matching"
-                            value: folderController.matchingCount
-                            accent: Theme.good
-                        }
-                        MetricBox {
-                            label: "Folders"
-                            value: folderController.folderDiffCount
-                            accent: Theme.faint
-                        }
-                        MetricBox {
-                            label: "Scanned"
-                            value: folderController.totalSizeText
-                            accent: Theme.faint
-                        }
-                    }
+                        Layout.margins: Theme.space.lg
+                        spacing: Theme.space.md
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        visible: folderController.busy
-                        spacing: Theme.space.sm
-
-                        ProgressBar {
-                            id: progressBar
+                        RowLayout {
                             Layout.fillWidth: true
-                            from: 0
-                            to: folderController.progressTotal > 0 ? folderController.progressTotal : 100
-                            value: folderController.progressTotal > 0 ? folderController.progressCurrent : 0
-                            background: Rectangle {
-                                implicitHeight: 6
-                                radius: Theme.radius.sm
-                                color: Theme.panelAlt
-                                border.color: Theme.line
-                                border.width: 1
+                            spacing: 10
+                            MetricBox {
+                                label: "Only A"
+                                value: folderController.onlyACount
+                                accent: Theme.warn
                             }
-                            contentItem: Item {
-                                implicitHeight: 6
-                                Rectangle {
-                                    width: progressBar.visualPosition * parent.width
-                                    height: parent.height
+                            MetricBox {
+                                label: "Only B"
+                                value: folderController.onlyBCount
+                                accent: Theme.warn
+                            }
+                            MetricBox {
+                                label: "Changed"
+                                value: folderController.changedCount
+                                accent: Theme.bad
+                            }
+                            MetricBox {
+                                label: "Matching"
+                                value: folderController.matchingCount
+                                accent: Theme.good
+                            }
+                            MetricBox {
+                                label: "Folders"
+                                value: folderController.folderDiffCount
+                                accent: Theme.faint
+                            }
+                            MetricBox {
+                                label: "Scanned"
+                                value: folderController.totalSizeText
+                                accent: Theme.faint
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: folderController.busy
+                            spacing: Theme.space.sm
+
+                            ProgressBar {
+                                id: progressBar
+                                Layout.fillWidth: true
+                                from: 0
+                                to: folderController.progressTotal > 0 ? folderController.progressTotal : 100
+                                value: folderController.progressTotal > 0 ? folderController.progressCurrent : 0
+                                background: Rectangle {
+                                    implicitHeight: 6
                                     radius: Theme.radius.sm
-                                    color: Theme.accent
-                                    Behavior on width {
-                                        NumberAnimation {
-                                            duration: Theme.motion.fast
-                                            easing.type: Theme.motion.easeStandard
+                                    color: Theme.panelAlt
+                                    border.color: Theme.line
+                                    border.width: 1
+                                }
+                                contentItem: Item {
+                                    implicitHeight: 6
+                                    Rectangle {
+                                        width: progressBar.visualPosition * parent.width
+                                        height: parent.height
+                                        radius: Theme.radius.sm
+                                        color: Theme.accent
+                                        Behavior on width {
+                                            NumberAnimation {
+                                                duration: Theme.motion.fast
+                                                easing.type: Theme.motion.easeStandard
+                                            }
                                         }
                                     }
                                 }
                             }
+
+                            Text {
+                                text: folderController.etaText
+                                visible: folderController.etaText.length > 0
+                                color: Theme.faint
+                                font.pixelSize: Theme.typography.body
+                                font.family: Theme.typography.mono
+                            }
                         }
 
-                        Text {
-                            text: folderController.etaText
-                            visible: folderController.etaText.length > 0
-                            color: Theme.faint
-                            font.pixelSize: Theme.typography.body
-                            font.family: Theme.typography.mono
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.space.sm
-                        Repeater {
-                            model: 6
-                            delegate: AppButton {
-                                required property int index
-                                Layout.fillWidth: true
-                                text: Theme.filterLabel(index) + (window.filterCount(index) > 0 ? " (" + window.filterCount(index) + ")" : "")
-                                Accessible.name: qsTr("Filter: %1").arg(Theme.filterLabel(index))
-                                Accessible.checkable: true
-                                Accessible.checked: checked
-                                checkable: true
-                                checked: window.activeFilter === index
-                                enabled: window.filterCount(index) > 0 || index === 0
-                                onClicked: {
-                                    window.activeFilter = index;
-                                    folderController.setFilterMode(index);
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.space.sm
+                            Repeater {
+                                model: 6
+                                delegate: AppButton {
+                                    required property int index
+                                    Layout.fillWidth: true
+                                    text: Theme.filterLabel(index) + (window.filterCount(index) > 0 ? " (" + window.filterCount(index) + ")" : "")
+                                    Accessible.name: qsTr("Filter: %1").arg(Theme.filterLabel(index))
+                                    Accessible.checkable: true
+                                    Accessible.checked: checked
+                                    checkable: true
+                                    checked: window.activeFilter === index
+                                    enabled: window.filterCount(index) > 0 || index === 0
+                                    onClicked: {
+                                        window.activeFilter = index;
+                                        folderController.setFilterMode(index);
+                                    }
+                                    ToolTip.visible: hovered && !enabled
+                                    ToolTip.text: "No results for this filter"
                                 }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 1
+                            color: Theme.line
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.space.sm
+                            visible: folderController.hasSelection || folderController.canUndo
+
+                            AppButton {
+                                Layout.fillWidth: true
+                                flatDisabled: true
+                                iconName: "arrow-left"
+                                text: "Copy to A"
+                                enabled: folderController.canCopyToA
+                                onClicked: folderController.copySelectedToA()
                                 ToolTip.visible: hovered && !enabled
-                                ToolTip.text: "No results for this filter"
+                                ToolTip.text: "Select items with content in B to copy to A"
+                            }
+                            AppButton {
+                                Layout.fillWidth: true
+                                flatDisabled: true
+                                iconName: "arrow-right"
+                                text: "Copy to B"
+                                enabled: folderController.canCopyToB
+                                onClicked: folderController.copySelectedToB()
+                                ToolTip.visible: hovered && !enabled
+                                ToolTip.text: "Select items with content in A to copy to B"
+                            }
+                            AppButton {
+                                Layout.fillWidth: true
+                                flatDisabled: true
+                                iconName: "move-left"
+                                text: "Move to A"
+                                enabled: folderController.canMoveToA
+                                onClicked: folderController.moveSelectedToA()
+                                ToolTip.visible: hovered && !enabled
+                                ToolTip.text: "Copy selected items from B to A, then delete originals"
+                            }
+                            AppButton {
+                                Layout.fillWidth: true
+                                flatDisabled: true
+                                iconName: "move-right"
+                                text: "Move to B"
+                                enabled: folderController.canMoveToB
+                                onClicked: folderController.moveSelectedToB()
+                                ToolTip.visible: hovered && !enabled
+                                ToolTip.text: "Copy selected items from A to B, then delete originals"
+                            }
+                            AppButton {
+                                Layout.fillWidth: true
+                                flatDisabled: true
+                                iconName: "undo"
+                                text: "Undo"
+                                enabled: folderController.canUndo
+                                onClicked: folderController.undoLastTransfer()
                             }
                         }
                     }
 
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 1
+                        Layout.preferredHeight: 1
                         color: Theme.line
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.space.sm
-                        visible: folderController.hasSelection || folderController.canUndo
-
-                        AppButton {
-                            Layout.fillWidth: true
-                            flatDisabled: true
-                            iconName: "arrow-left"
-                            text: "Copy to A"
-                            enabled: folderController.canCopyToA
-                            onClicked: folderController.copySelectedToA()
-                            ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Select items with content in B to copy to A"
-                        }
-                        AppButton {
-                            Layout.fillWidth: true
-                            flatDisabled: true
-                            iconName: "arrow-right"
-                            text: "Copy to B"
-                            enabled: folderController.canCopyToB
-                            onClicked: folderController.copySelectedToB()
-                            ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Select items with content in A to copy to B"
-                        }
-                        AppButton {
-                            Layout.fillWidth: true
-                            flatDisabled: true
-                            iconName: "move-left"
-                            text: "Move to A"
-                            enabled: folderController.canMoveToA
-                            onClicked: folderController.moveSelectedToA()
-                            ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Copy selected items from B to A, then delete originals"
-                        }
-                        AppButton {
-                            Layout.fillWidth: true
-                            flatDisabled: true
-                            iconName: "move-right"
-                            text: "Move to B"
-                            enabled: folderController.canMoveToB
-                            onClicked: folderController.moveSelectedToB()
-                            ToolTip.visible: hovered && !enabled
-                            ToolTip.text: "Copy selected items from A to B, then delete originals"
-                        }
-                        AppButton {
-                            Layout.fillWidth: true
-                            flatDisabled: true
-                            iconName: "undo"
-                            text: "Undo"
-                            enabled: folderController.canUndo
-                            onClicked: folderController.undoLastTransfer()
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                color: Theme.bg
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 0
-                    spacing: 0
-
-                    Row {
-                        Layout.fillWidth: true
-                        height: 30
-                        Rectangle {
-                            width: 30
-                            height: 30
-                            color: Theme.panelAlt
-                            border.color: Theme.line
-                            border.width: 1
-                        }
-                        Rectangle {
-                            width: parent.width - 270
-                            height: 30
-                            color: Theme.panelAlt
-                            border.color: Theme.line
-                            border.width: 1
-                            Label {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.space.sm
-                                text: "Name"
-                                color: Theme.muted
-                                verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: Theme.typography.body
-                                font.family: Theme.typography.mono
-                            }
-                        }
-                        Rectangle {
-                            width: 80
-                            height: 30
-                            color: Theme.panelAlt
-                            border.color: Theme.line
-                            border.width: 1
-                            Label {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.space.sm
-                                text: "Size A"
-                                color: Theme.muted
-                                verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: Theme.typography.body
-                                font.family: Theme.typography.mono
-                            }
-                        }
-                        Rectangle {
-                            width: 80
-                            height: 30
-                            color: Theme.panelAlt
-                            border.color: Theme.line
-                            border.width: 1
-                            Label {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.space.sm
-                                text: "Size B"
-                                color: Theme.muted
-                                verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: Theme.typography.body
-                                font.family: Theme.typography.mono
-                            }
-                        }
-                        Rectangle {
-                            width: 110
-                            height: 30
-                            color: Theme.panelAlt
-                            border.color: Theme.line
-                            border.width: 1
-                            Label {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.space.sm
-                                text: "Status"
-                                color: Theme.muted
-                                verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: Theme.typography.body
-                                font.family: Theme.typography.mono
-                            }
-                        }
-                    }
-
-                    Item {
+                    // Results tree
+                    ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        spacing: 0
 
-                        ListView {
-                            id: treeView
-                            anchors.fill: parent
-                            clip: true
-                            model: treeModel.flatItems
-                            boundsBehavior: Flickable.StopAtBounds
-                            spacing: 0
-
-                            delegate: Rectangle {
-                                required property int index
-                                required property var modelData
-                                readonly property var node: modelData
-                                readonly property bool hovered: rowMouse.containsMouse
-                                readonly property color baseColor: index % 2 === 0 ? Theme.panel : Theme.panelAlt
-                                readonly property color hoverColor: window.darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
-                                implicitWidth: treeView.width
-                                implicitHeight: 30
-                                color: hovered ? hoverColor : baseColor
+                        Row {
+                            Layout.fillWidth: true
+                            height: 30
+                            Rectangle {
+                                width: 30
+                                height: 30
+                                color: Theme.panelAlt
                                 border.color: Theme.line
                                 border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: Theme.motion.fast
-                                    }
-                                }
-
-                                Row {
+                            }
+                            Rectangle {
+                                width: parent.width - 270
+                                height: 30
+                                color: Theme.panelAlt
+                                border.color: Theme.line
+                                border.width: 1
+                                Label {
                                     anchors.fill: parent
+                                    anchors.leftMargin: Theme.space.sm
+                                    text: "Name"
+                                    color: Theme.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: Theme.typography.body
+                                    font.family: Theme.typography.mono
+                                }
+                            }
+                            Rectangle {
+                                width: 80
+                                height: 30
+                                color: Theme.panelAlt
+                                border.color: Theme.line
+                                border.width: 1
+                                Label {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.space.sm
+                                    text: "Size A"
+                                    color: Theme.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: Theme.typography.body
+                                    font.family: Theme.typography.mono
+                                }
+                            }
+                            Rectangle {
+                                width: 80
+                                height: 30
+                                color: Theme.panelAlt
+                                border.color: Theme.line
+                                border.width: 1
+                                Label {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.space.sm
+                                    text: "Size B"
+                                    color: Theme.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: Theme.typography.body
+                                    font.family: Theme.typography.mono
+                                }
+                            }
+                            Rectangle {
+                                width: 110
+                                height: 30
+                                color: Theme.panelAlt
+                                border.color: Theme.line
+                                border.width: 1
+                                Label {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.space.sm
+                                    text: "Status"
+                                    color: Theme.muted
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: Theme.typography.body
+                                    font.family: Theme.typography.mono
+                                }
+                            }
+                        }
 
-                                    Item {
-                                        width: 30
-                                        height: parent.height
-                                        Icon {
-                                            anchors.centerIn: parent
-                                            name: node.expanded ? "chevron-down" : "chevron-right"
-                                            color: Theme.muted
-                                            size: 14
-                                            visible: node.isFolder && node.children.length > 0
-                                        }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            enabled: node.isFolder && node.children.length > 0
-                                            onClicked: treeModel.toggleExpanded(node.relPath)
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+
+                            ListView {
+                                id: treeView
+                                anchors.fill: parent
+                                clip: true
+                                model: treeModel.flatItems
+                                boundsBehavior: Flickable.StopAtBounds
+                                spacing: 0
+
+                                delegate: Rectangle {
+                                    required property int index
+                                    required property var modelData
+                                    readonly property var node: modelData
+                                    readonly property bool hovered: rowMouse.containsMouse
+                                    readonly property color baseColor: index % 2 === 0 ? Theme.panel : Theme.panelAlt
+                                    readonly property color hoverColor: window.darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
+                                    implicitWidth: treeView.width
+                                    implicitHeight: 30
+                                    color: hovered ? hoverColor : baseColor
+                                    border.color: Theme.line
+                                    border.width: 1
+
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: Theme.motion.fast
                                         }
                                     }
 
-                                    Item {
-                                        width: parent.width - 270
-                                        height: parent.height
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 6
-                                            spacing: Theme.space.xs
-                                            Rectangle {
-                                                width: 10
-                                                height: 10
-                                                radius: 5
-                                                Layout.alignment: Qt.AlignVCenter
-                                                color: {
-                                                    var s = node.aggregateStatus !== undefined ? node.aggregateStatus : node.status;
-                                                    if (s === 0)
-                                                        return Theme.good;
-                                                    if (s === 1)
-                                                        return Theme.bad;
-                                                    if (s === 2 || s === 4)
-                                                        return Theme.warn;
-                                                    if (s === 3 || s === 5)
-                                                        return Theme.warn;
-                                                    return Theme.faint;
-                                                }
-                                            }
-                                            Text {
-                                                Layout.fillWidth: true
-                                                text: node.name
-                                                color: Theme.text
-                                                elide: Text.ElideMiddle
-                                                verticalAlignment: Text.AlignVCenter
-                                                font.pixelSize: Theme.typography.body
-                                                font.family: Theme.typography.mono
-                                                leftPadding: node.depth * 16
-                                            }
-                                        }
-                                    }
+                                    Row {
+                                        anchors.fill: parent
 
-                                    Rectangle {
-                                        width: 80
-                                        height: parent.height
-                                        color: "transparent"
-                                        Text {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: Theme.space.sm
-                                            text: node.sizeA || ""
-                                            color: node.sizeA ? Theme.text : Theme.faint
-                                            elide: Text.ElideRight
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: Theme.typography.caption
-                                            font.family: Theme.typography.mono
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        width: 80
-                                        height: parent.height
-                                        color: "transparent"
-                                        Text {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: Theme.space.sm
-                                            text: node.sizeB || ""
-                                            color: node.sizeB ? Theme.text : Theme.faint
-                                            elide: Text.ElideRight
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: Theme.typography.caption
-                                            font.family: Theme.typography.mono
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        id: statusCell
-                                        width: 110
-                                        height: parent.height
-                                        color: "transparent"
-                                        readonly property color statusTint: {
-                                            var s = node.status;
-                                            if (s === 0)
-                                                return Theme.good;
-                                            if (s === 1)
-                                                return Theme.bad;
-                                            if (s >= 2)
-                                                return Theme.warn;
-                                            return Theme.faint;
-                                        }
-                                        Row {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 6
-                                            spacing: Theme.space.xs
+                                        Item {
+                                            width: 30
+                                            height: parent.height
                                             Icon {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                size: 13
-                                                visible: name.length > 0
-                                                color: statusCell.statusTint
-                                                name: {
-                                                    var s = node.status;
-                                                    if (s === 0)
-                                                        return "check";
-                                                    if (s === 1)
-                                                        return "diff";
-                                                    if (s === 2)
-                                                        return "arrow-left";
-                                                    if (s === 3)
-                                                        return "arrow-right";
-                                                    if (s === 4 || s === 5)
-                                                        return "folder";
-                                                    return "";
+                                                anchors.centerIn: parent
+                                                name: node.expanded ? "chevron-down" : "chevron-right"
+                                                color: Theme.muted
+                                                size: 14
+                                                visible: node.isFolder && node.children.length > 0
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: node.isFolder && node.children.length > 0
+                                                onClicked: treeModel.toggleExpanded(node.relPath)
+                                            }
+                                        }
+
+                                        Item {
+                                            width: parent.width - 270
+                                            height: parent.height
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 6
+                                                spacing: Theme.space.xs
+                                                Rectangle {
+                                                    width: 10
+                                                    height: 10
+                                                    radius: 5
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    color: {
+                                                        var s = node.aggregateStatus !== undefined ? node.aggregateStatus : node.status;
+                                                        if (s === 0)
+                                                            return Theme.good;
+                                                        if (s === 1)
+                                                            return Theme.bad;
+                                                        if (s === 2 || s === 4)
+                                                            return Theme.warn;
+                                                        if (s === 3 || s === 5)
+                                                            return Theme.warn;
+                                                        return Theme.faint;
+                                                    }
+                                                }
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: node.name
+                                                    color: Theme.text
+                                                    elide: Text.ElideMiddle
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    font.pixelSize: Theme.typography.body
+                                                    font.family: Theme.typography.mono
+                                                    leftPadding: node.depth * 16
                                                 }
                                             }
+                                        }
+
+                                        Rectangle {
+                                            width: 80
+                                            height: parent.height
+                                            color: "transparent"
                                             Text {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                color: statusCell.statusTint
-                                                text: {
-                                                    var s = node.status;
-                                                    if (s === 0)
-                                                        return "Match";
-                                                    if (s === 1)
-                                                        return "Changed";
-                                                    if (s === 2)
-                                                        return "Only A";
-                                                    if (s === 3)
-                                                        return "Only B";
-                                                    if (s === 4)
-                                                        return "Folder (A)";
-                                                    if (s === 5)
-                                                        return "Folder (B)";
-                                                    return "";
-                                                }
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Theme.space.sm
+                                                text: node.sizeA || ""
+                                                color: node.sizeA ? Theme.text : Theme.faint
                                                 elide: Text.ElideRight
                                                 verticalAlignment: Text.AlignVCenter
                                                 font.pixelSize: Theme.typography.caption
                                                 font.family: Theme.typography.mono
                                             }
                                         }
+
+                                        Rectangle {
+                                            width: 80
+                                            height: parent.height
+                                            color: "transparent"
+                                            Text {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Theme.space.sm
+                                                text: node.sizeB || ""
+                                                color: node.sizeB ? Theme.text : Theme.faint
+                                                elide: Text.ElideRight
+                                                verticalAlignment: Text.AlignVCenter
+                                                font.pixelSize: Theme.typography.caption
+                                                font.family: Theme.typography.mono
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            id: statusCell
+                                            width: 110
+                                            height: parent.height
+                                            color: "transparent"
+                                            readonly property color statusTint: {
+                                                var s = node.status;
+                                                if (s === 0)
+                                                    return Theme.good;
+                                                if (s === 1)
+                                                    return Theme.bad;
+                                                if (s >= 2)
+                                                    return Theme.warn;
+                                                return Theme.faint;
+                                            }
+                                            Row {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 6
+                                                spacing: Theme.space.xs
+                                                Icon {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    size: 13
+                                                    visible: name.length > 0
+                                                    color: statusCell.statusTint
+                                                    name: {
+                                                        var s = node.status;
+                                                        if (s === 0)
+                                                            return "check";
+                                                        if (s === 1)
+                                                            return "diff";
+                                                        if (s === 2)
+                                                            return "arrow-left";
+                                                        if (s === 3)
+                                                            return "arrow-right";
+                                                        if (s === 4 || s === 5)
+                                                            return "folder";
+                                                        return "";
+                                                    }
+                                                }
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: statusCell.statusTint
+                                                    text: {
+                                                        var s = node.status;
+                                                        if (s === 0)
+                                                            return "Match";
+                                                        if (s === 1)
+                                                            return "Changed";
+                                                        if (s === 2)
+                                                            return "Only A";
+                                                        if (s === 3)
+                                                            return "Only B";
+                                                        if (s === 4)
+                                                            return "Folder (A)";
+                                                        if (s === 5)
+                                                            return "Folder (B)";
+                                                        return "";
+                                                    }
+                                                    elide: Text.ElideRight
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    font.pixelSize: Theme.typography.caption
+                                                    font.family: Theme.typography.mono
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: rowMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: function (mouse) {
+                                            if (node.isFolder && node.children.length > 0) {
+                                                treeModel.toggleExpanded(node.relPath);
+                                            }
+                                            if (mouse.button === Qt.RightButton) {
+                                                contextMenu.targetRelPath = node.relPath;
+                                                contextMenu.targetIsFolder = node.isFolder;
+                                                contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4;
+                                                contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4;
+                                                contextMenu.popup();
+                                            }
+                                        }
                                     }
                                 }
 
-                                MouseArea {
-                                    id: rowMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onClicked: function (mouse) {
-                                        if (node.isFolder && node.children.length > 0) {
-                                            treeModel.toggleExpanded(node.relPath);
-                                        }
-                                        if (mouse.button === Qt.RightButton) {
-                                            contextMenu.targetRelPath = node.relPath;
-                                            contextMenu.targetIsFolder = node.isFolder;
-                                            contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4;
-                                            contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4;
-                                            contextMenu.popup();
-                                        }
-                                    }
-                                }
+                                ScrollBar.vertical: ScrollBar {}
                             }
 
-                            ScrollBar.vertical: ScrollBar {}
-                        }
+                            Rectangle {
+                                id: emptyState
+                                anchors.fill: parent
+                                visible: treeModel.flatItems.length === 0
+                                color: Theme.bg
+                                border.color: Theme.line
+                                border.width: 1
 
-                        Rectangle {
-                            id: emptyState
-                            anchors.fill: parent
-                            visible: treeModel.flatItems.length === 0
-                            color: Theme.bg
-                            border.color: Theme.line
-                            border.width: 1
+                                readonly property bool hasFolders: folderController.folderA.length > 0 && folderController.folderB.length > 0
 
-                            readonly property bool hasFolders: folderController.folderA.length > 0 && folderController.folderB.length > 0
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    width: Math.min(parent.width - 80, 460)
+                                    spacing: Theme.space.md
 
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                width: Math.min(parent.width - 80, 460)
-                                spacing: Theme.space.md
+                                    Icon {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        size: 56
+                                        color: Theme.line
+                                        name: folderController.busy ? "sync" : (folderController.hasReport ? "filter" : "folder-tree")
 
-                                Icon {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    size: 56
-                                    color: Theme.line
-                                    name: folderController.busy ? "sync" : (folderController.hasReport ? "filter" : "folder-tree")
-
-                                    RotationAnimator on rotation {
-                                        from: 0
-                                        to: 360
-                                        duration: 1400
-                                        loops: Animation.Infinite
-                                        running: folderController.busy
+                                        RotationAnimator on rotation {
+                                            from: 0
+                                            to: 360
+                                            duration: 1400
+                                            loops: Animation.Infinite
+                                            running: folderController.busy
+                                        }
                                     }
-                                }
 
-                                Label {
-                                    Layout.fillWidth: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.typography.title
-                                    font.bold: true
-                                    text: folderController.busy ? qsTr("Comparing folders…") : (folderController.hasReport ? qsTr("Nothing to show here") : (emptyState.hasFolders ? qsTr("Ready to compare") : qsTr("Compare two folders")))
-                                }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        color: Theme.muted
+                                        font.pixelSize: Theme.typography.title
+                                        font.bold: true
+                                        text: folderController.busy ? qsTr("Comparing folders…") : (folderController.hasReport ? qsTr("Nothing to show here") : (emptyState.hasFolders ? qsTr("Ready to compare") : qsTr("Compare two folders")))
+                                    }
 
-                                Label {
-                                    Layout.fillWidth: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    wrapMode: Text.WordWrap
-                                    color: Theme.faint
-                                    font.pixelSize: Theme.typography.label
-                                    text: folderController.busy ? qsTr("Scanning and matching files between Folder A and Folder B.") : (folderController.hasReport ? qsTr("No items match the current filter.") : (emptyState.hasFolders ? qsTr("Press Start Comparison (%1) to scan both folders.").arg(window.hintText(window.startShortcut)) : qsTr("Choose Folder A and Folder B in the sidebar to begin.")))
+                                    Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                        color: Theme.faint
+                                        font.pixelSize: Theme.typography.label
+                                        text: folderController.busy ? qsTr("Scanning and matching files between Folder A and Folder B.") : (folderController.hasReport ? qsTr("No items match the current filter.") : (emptyState.hasFolders ? qsTr("Press Start Comparison (%1) to scan both folders.").arg(window.hintText(window.startShortcut)) : qsTr("Choose Folder A and Folder B in the sidebar to begin.")))
+                                    }
                                 }
                             }
                         }
@@ -887,13 +910,14 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(statusPanel.implicitHeight + 24, window.height * 0.13)
-                Layout.minimumHeight: statusPanel.implicitHeight + 24
-                color: Theme.panel
-                border.color: Theme.line
-                border.width: 1
+            DockPanel {
+                id: consolePanel
+                title: qsTr("CONSOLE")
+                iconName: "info"
+                collapsible: true
+                SplitView.minimumHeight: collapsed ? collapsedSize : 90
+                SplitView.preferredHeight: collapsed ? collapsedSize : Math.max(160, window.height * 0.18)
+                SplitView.maximumHeight: collapsed ? collapsedSize : Infinity
 
                 ColumnLayout {
                     id: statusPanel
@@ -928,6 +952,7 @@ ApplicationWindow {
                             }
                         }
                         AppButton {
+                            iconName: "trash"
                             text: "Clear"
                             onClicked: folderController.clearLog()
                         }

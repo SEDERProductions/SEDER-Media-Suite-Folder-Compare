@@ -106,6 +106,7 @@ qt_add_qml_module(seder-folder-compare-qt
         qml/components/FolderPicker.qml
         qml/components/Icon.qml
         qml/components/IconPaths.qml
+        qml/components/DockPanel.qml
 )
 
 # ── Translations ─────────────────────────────────────────────────────────────
