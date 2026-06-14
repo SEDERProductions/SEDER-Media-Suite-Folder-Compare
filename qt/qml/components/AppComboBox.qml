@@ -11,20 +11,33 @@ ComboBox {
 
     font.family: Theme.typography.ui
     font.pixelSize: Theme.typography.label
+    hoverEnabled: true
 
     background: Rectangle {
         radius: Theme.radius.md
         color: Theme.panelAlt
-        border.color: Theme.line
+        border.color: (control.activeFocus || control.popup.visible) ? Theme.accent : (control.hovered ? Qt.lighter(Theme.line, 1.3) : Theme.line)
         border.width: 1
+        Behavior on border.color {
+            ColorAnimation {
+                duration: Theme.motion.fast
+            }
+        }
     }
 
     indicator: Icon {
         name: "chevron-down"
-        color: Theme.faint
+        color: control.popup.visible ? Theme.accent : Theme.faint
         size: 14
         x: control.width - width - Theme.space.sm
         y: control.topPadding + (control.availableHeight - height) / 2
+        rotation: control.popup.visible ? 180 : 0
+        Behavior on rotation {
+            NumberAnimation {
+                duration: Theme.motion.fast
+                easing.type: Theme.motion.easeStandard
+            }
+        }
     }
 
     contentItem: Text {

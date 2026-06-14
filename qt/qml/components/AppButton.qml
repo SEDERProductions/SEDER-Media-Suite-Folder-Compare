@@ -8,7 +8,7 @@ import Seder.UI
 // background/contentItem definitions. Variants map to the prior ad-hoc styles:
 //   Primary   – accent fill (Start, primary dialog actions)
 //   Secondary – panelAlt fill with line border (default)
-//   Ghost     – transparent until pressed
+//   Ghost     – transparent until hovered/pressed
 //   Danger    – destructive accent (bad)
 Button {
     id: control
@@ -25,7 +25,6 @@ Button {
     // When true, a disabled button recedes into the window background instead
     // of keeping its panel surface (matches the prior export/copy/move look).
     property bool flatDisabled: false
-    // Reserved for Phase B iconography; ignored until Icon.qml exists.
     property string iconName: ""
 
     readonly property bool _accentFill: variant === AppButton.Primary || (checkable && checked)
@@ -36,18 +35,27 @@ Button {
     font.pixelSize: Theme.typography.body
     hoverEnabled: true
 
+    // Tactile press feedback.
+    scale: control.down ? 0.97 : 1.0
+    Behavior on scale {
+        NumberAnimation {
+            duration: Theme.motion.fast
+            easing.type: Theme.motion.easeStandard
+        }
+    }
+
     background: Rectangle {
         radius: Theme.radius.md
         color: {
             if (!control.enabled)
                 return control.flatDisabled ? Theme.bg : Theme.panelAlt;
             if (control._accentFill)
-                return control.down ? Theme.accentDark : Theme.accent;
+                return control.down ? Theme.accentDark : (control.hovered ? Qt.lighter(Theme.accent, 1.08) : Theme.accent);
             if (control._danger)
-                return control.down ? Qt.darker(Theme.bad, 1.15) : Theme.bad;
+                return control.down ? Qt.darker(Theme.bad, 1.15) : (control.hovered ? Qt.lighter(Theme.bad, 1.08) : Theme.bad);
             if (control.variant === AppButton.Ghost)
-                return control.down ? Theme.panelAlt : "transparent";
-            return control.down ? Theme.accentDark : Theme.panelAlt;
+                return control.down ? Qt.darker(Theme.panelAlt, 1.1) : (control.hovered ? Theme.panelAlt : "transparent");
+            return control.down ? Qt.darker(Theme.panelAlt, 1.12) : (control.hovered ? Qt.lighter(Theme.panelAlt, 1.12) : Theme.panelAlt);
         }
         border.width: 1
         border.color: {
@@ -57,7 +65,24 @@ Button {
                 return Theme.accentDark;
             if (control.variant === AppButton.Ghost)
                 return "transparent";
-            return Theme.line;
+            return control.hovered ? Qt.lighter(Theme.line, 1.2) : Theme.line;
+        }
+
+        Behavior on color {
+            ColorAnimation {
+                duration: Theme.motion.fast
+            }
+        }
+
+        // Keyboard focus ring.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: parent.radius + 2
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.focusRing
+            visible: control.visualFocus
         }
     }
 

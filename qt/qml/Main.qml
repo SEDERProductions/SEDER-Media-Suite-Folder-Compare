@@ -71,7 +71,7 @@ ApplicationWindow {
         onActivated: folderController.chooseFolderB()
     }
     Shortcut {
-        sequence: StandardKey.Refresh
+        sequence: window.startShortcut
         onActivated: folderController.startComparison()
     }
     Shortcut {
@@ -80,11 +80,13 @@ ApplicationWindow {
         onActivated: folderController.cancelComparison()
     }
     Shortcut {
-        sequence: StandardKey.Save
+        sequence: window.exportTxtShortcut
+        enabled: folderController.hasReport && !folderController.busy
         onActivated: folderController.exportTxt()
     }
     Shortcut {
-        sequence: StandardKey.SaveAs
+        sequence: window.exportCsvShortcut
+        enabled: folderController.hasReport && !folderController.busy
         onActivated: folderController.exportCsv()
     }
 
@@ -409,19 +411,32 @@ ApplicationWindow {
                         spacing: Theme.space.sm
 
                         ProgressBar {
+                            id: progressBar
                             Layout.fillWidth: true
                             from: 0
                             to: folderController.progressTotal > 0 ? folderController.progressTotal : 100
                             value: folderController.progressTotal > 0 ? folderController.progressCurrent : 0
                             background: Rectangle {
+                                implicitHeight: 6
                                 radius: Theme.radius.sm
                                 color: Theme.panelAlt
                                 border.color: Theme.line
                                 border.width: 1
                             }
-                            contentItem: Rectangle {
-                                radius: Theme.radius.sm
-                                color: Theme.accent
+                            contentItem: Item {
+                                implicitHeight: 6
+                                Rectangle {
+                                    width: progressBar.visualPosition * parent.width
+                                    height: parent.height
+                                    radius: Theme.radius.sm
+                                    color: Theme.accent
+                                    Behavior on width {
+                                        NumberAnimation {
+                                            duration: Theme.motion.fast
+                                            easing.type: Theme.motion.easeStandard
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -543,7 +558,7 @@ ApplicationWindow {
                             border.width: 1
                         }
                         Rectangle {
-                            width: parent.width - 250
+                            width: parent.width - 270
                             height: 30
                             color: Theme.panelAlt
                             border.color: Theme.line
@@ -591,7 +606,7 @@ ApplicationWindow {
                             }
                         }
                         Rectangle {
-                            width: 90
+                            width: 110
                             height: 30
                             color: Theme.panelAlt
                             border.color: Theme.line
@@ -660,7 +675,7 @@ ApplicationWindow {
                                     }
 
                                     Item {
-                                        width: parent.width - 250
+                                        width: parent.width - 270
                                         height: parent.height
                                         RowLayout {
                                             anchors.fill: parent
@@ -731,7 +746,7 @@ ApplicationWindow {
 
                                     Rectangle {
                                         id: statusCell
-                                        width: 90
+                                        width: 110
                                         height: parent.height
                                         color: "transparent"
                                         readonly property color statusTint: {
@@ -820,19 +835,52 @@ ApplicationWindow {
                         }
 
                         Rectangle {
+                            id: emptyState
                             anchors.fill: parent
                             visible: treeModel.flatItems.length === 0
                             color: Theme.bg
                             border.color: Theme.line
                             border.width: 1
-                            Label {
+
+                            readonly property bool hasFolders: folderController.folderA.length > 0 && folderController.folderB.length > 0
+
+                            ColumnLayout {
                                 anchors.centerIn: parent
-                                width: Math.min(parent.width - 80, 520)
-                                text: folderController.busy ? "Comparison running..." : "Choose two folders and start comparison."
-                                color: Theme.muted
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WordWrap
-                                font.pixelSize: 15
+                                width: Math.min(parent.width - 80, 460)
+                                spacing: Theme.space.md
+
+                                Icon {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    size: 56
+                                    color: Theme.line
+                                    name: folderController.busy ? "sync" : (folderController.hasReport ? "filter" : "folder-tree")
+
+                                    RotationAnimator on rotation {
+                                        from: 0
+                                        to: 360
+                                        duration: 1400
+                                        loops: Animation.Infinite
+                                        running: folderController.busy
+                                    }
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    color: Theme.muted
+                                    font.pixelSize: Theme.typography.title
+                                    font.bold: true
+                                    text: folderController.busy ? qsTr("Comparing folders…") : (folderController.hasReport ? qsTr("Nothing to show here") : (emptyState.hasFolders ? qsTr("Ready to compare") : qsTr("Compare two folders")))
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.faint
+                                    font.pixelSize: Theme.typography.label
+                                    text: folderController.busy ? qsTr("Scanning and matching files between Folder A and Folder B.") : (folderController.hasReport ? qsTr("No items match the current filter.") : (emptyState.hasFolders ? qsTr("Press Start Comparison (%1) to scan both folders.").arg(window.hintText(window.startShortcut)) : qsTr("Choose Folder A and Folder B in the sidebar to begin.")))
+                                }
                             }
                         }
                     }
