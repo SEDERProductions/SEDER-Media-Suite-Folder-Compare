@@ -35,7 +35,7 @@ ColumnLayout {
 
         AppButton {
             id: recentButton
-            text: "▾"
+            iconName: "chevron-down"
             enabled: !folderController.busy && picker.recentList.length > 0
             Accessible.name: qsTr("Recent folders for %1").arg(picker.label)
             onClicked: recentMenu.popup()

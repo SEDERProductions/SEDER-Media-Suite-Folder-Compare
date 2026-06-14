@@ -32,7 +32,7 @@ QtObject {
     // ── Color · semantic ──────────────────────────────────────────────────
     readonly property color accent: "#c63b13"
     readonly property color accentDark: "#8a3a16"
-    readonly property color onAccent: "#fff7ee"
+    readonly property color accentText: "#fff7ee"
     readonly property color good: dark ? "#4cab7e" : "#1f7a4d"
     readonly property color warn: "#a47a3a"
     readonly property color bad: dark ? "#d25645" : "#c63b13"

@@ -85,10 +85,11 @@ qt_add_resources(seder-folder-compare-qt icon_resources
         "../assets/icon.svg"
 )
 
-# The QML front end is a proper module (URI "Seder.UI"). Theme is a singleton
-# design-token object; the rest are reusable components and panels. New QML
+# The QML front end is a proper module (URI "Seder.UI"). Theme and IconPaths are
+# singleton data objects; the rest are reusable components and panels. New QML
 # files must be added to QML_FILES below to be compiled into the module.
 set_source_files_properties(qml/theme/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/components/IconPaths.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(seder-folder-compare-qt
     URI Seder.UI
@@ -103,6 +104,8 @@ qt_add_qml_module(seder-folder-compare-qt
         qml/components/SectionLabel.qml
         qml/components/MetricBox.qml
         qml/components/FolderPicker.qml
+        qml/components/Icon.qml
+        qml/components/IconPaths.qml
 )
 
 # ── Translations ─────────────────────────────────────────────────────────────

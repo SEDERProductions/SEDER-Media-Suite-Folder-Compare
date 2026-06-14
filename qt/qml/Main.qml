@@ -196,6 +196,7 @@ ApplicationWindow {
                         }
 
                         AppButton {
+                            iconName: "save"
                             text: qsTr("Save…")
                             enabled: !folderController.busy
                             Accessible.name: qsTr("Save current settings as a profile")
@@ -203,7 +204,7 @@ ApplicationWindow {
                         }
 
                         AppButton {
-                            text: "✕"
+                            iconName: "trash"
                             enabled: !folderController.busy && profileCombo.currentText.length > 0
                             Accessible.name: qsTr("Delete profile")
                             onClicked: {
@@ -279,6 +280,7 @@ ApplicationWindow {
                                 required property string modelData
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 1
+                                iconName: "theme-" + modelData
                                 text: modelData.toUpperCase()
                                 checkable: true
                                 checked: folderController.theme === modelData
@@ -292,6 +294,7 @@ ApplicationWindow {
                         spacing: Theme.space.sm
                         AppButton {
                             Layout.fillWidth: true
+                            iconName: folderController.busy ? "stop" : "play"
                             variant: folderController.busy ? AppButton.Secondary : AppButton.Primary
                             text: folderController.busy ? qsTr("Cancel Comparison (Esc)") : qsTr("Start Comparison") + " (" + window.hintText(window.startShortcut) + ")"
                             Accessible.name: folderController.busy ? qsTr("Cancel the running comparison") : qsTr("Start a new comparison")
@@ -327,6 +330,7 @@ ApplicationWindow {
                     AppButton {
                         Layout.fillWidth: true
                         flatDisabled: true
+                        iconName: "sync"
                         text: qsTr("Sync planner…")
                         enabled: folderController.hasReport && !folderController.busy
                         Accessible.name: qsTr("Open the sync planner")
@@ -468,9 +472,9 @@ ApplicationWindow {
 
                         AppButton {
                             Layout.fillWidth: true
-                            mono: true
                             flatDisabled: true
-                            text: "◀ Copy to A"
+                            iconName: "arrow-left"
+                            text: "Copy to A"
                             enabled: folderController.canCopyToA
                             onClicked: folderController.copySelectedToA()
                             ToolTip.visible: hovered && !enabled
@@ -478,9 +482,9 @@ ApplicationWindow {
                         }
                         AppButton {
                             Layout.fillWidth: true
-                            mono: true
                             flatDisabled: true
-                            text: "Copy to B ▶"
+                            iconName: "arrow-right"
+                            text: "Copy to B"
                             enabled: folderController.canCopyToB
                             onClicked: folderController.copySelectedToB()
                             ToolTip.visible: hovered && !enabled
@@ -488,9 +492,9 @@ ApplicationWindow {
                         }
                         AppButton {
                             Layout.fillWidth: true
-                            mono: true
                             flatDisabled: true
-                            text: "◀ Move to A"
+                            iconName: "move-left"
+                            text: "Move to A"
                             enabled: folderController.canMoveToA
                             onClicked: folderController.moveSelectedToA()
                             ToolTip.visible: hovered && !enabled
@@ -498,9 +502,9 @@ ApplicationWindow {
                         }
                         AppButton {
                             Layout.fillWidth: true
-                            mono: true
                             flatDisabled: true
-                            text: "Move to B ▶"
+                            iconName: "move-right"
+                            text: "Move to B"
                             enabled: folderController.canMoveToB
                             onClicked: folderController.moveSelectedToB()
                             ToolTip.visible: hovered && !enabled
@@ -508,8 +512,8 @@ ApplicationWindow {
                         }
                         AppButton {
                             Layout.fillWidth: true
-                            mono: true
                             flatDisabled: true
+                            iconName: "undo"
                             text: "Undo"
                             enabled: folderController.canUndo
                             onClicked: folderController.undoLastTransfer()
@@ -641,11 +645,11 @@ ApplicationWindow {
                                     Item {
                                         width: 30
                                         height: parent.height
-                                        Text {
+                                        Icon {
                                             anchors.centerIn: parent
-                                            text: node.isFolder ? (node.expanded ? "▼" : "▶") : ""
+                                            name: node.expanded ? "chevron-down" : "chevron-right"
                                             color: Theme.muted
-                                            font.pixelSize: 10
+                                            size: 14
                                             visible: node.isFolder && node.children.length > 0
                                         }
                                         MouseArea {
@@ -726,42 +730,68 @@ ApplicationWindow {
                                     }
 
                                     Rectangle {
+                                        id: statusCell
                                         width: 90
                                         height: parent.height
                                         color: "transparent"
-                                        Text {
+                                        readonly property color statusTint: {
+                                            var s = node.status;
+                                            if (s === 0)
+                                                return Theme.good;
+                                            if (s === 1)
+                                                return Theme.bad;
+                                            if (s >= 2)
+                                                return Theme.warn;
+                                            return Theme.faint;
+                                        }
+                                        Row {
                                             anchors.fill: parent
                                             anchors.leftMargin: 6
-                                            text: {
-                                                var s = node.status;
-                                                if (s === 0)
-                                                    return "✓ Match";
-                                                if (s === 1)
-                                                    return "✗ Changed";
-                                                if (s === 2)
-                                                    return "▸ Only A";
-                                                if (s === 3)
-                                                    return "▸ Only B";
-                                                if (s === 4)
-                                                    return "Folder (A)";
-                                                if (s === 5)
-                                                    return "Folder (B)";
-                                                return "";
+                                            spacing: Theme.space.xs
+                                            Icon {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                size: 13
+                                                visible: name.length > 0
+                                                color: statusCell.statusTint
+                                                name: {
+                                                    var s = node.status;
+                                                    if (s === 0)
+                                                        return "check";
+                                                    if (s === 1)
+                                                        return "diff";
+                                                    if (s === 2)
+                                                        return "arrow-left";
+                                                    if (s === 3)
+                                                        return "arrow-right";
+                                                    if (s === 4 || s === 5)
+                                                        return "folder";
+                                                    return "";
+                                                }
                                             }
-                                            color: {
-                                                var s = node.status;
-                                                if (s === 0)
-                                                    return Theme.good;
-                                                if (s === 1)
-                                                    return Theme.bad;
-                                                if (s >= 2)
-                                                    return Theme.warn;
-                                                return Theme.faint;
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                color: statusCell.statusTint
+                                                text: {
+                                                    var s = node.status;
+                                                    if (s === 0)
+                                                        return "Match";
+                                                    if (s === 1)
+                                                        return "Changed";
+                                                    if (s === 2)
+                                                        return "Only A";
+                                                    if (s === 3)
+                                                        return "Only B";
+                                                    if (s === 4)
+                                                        return "Folder (A)";
+                                                    if (s === 5)
+                                                        return "Folder (B)";
+                                                    return "";
+                                                }
+                                                elide: Text.ElideRight
+                                                verticalAlignment: Text.AlignVCenter
+                                                font.pixelSize: Theme.typography.caption
+                                                font.family: Theme.typography.mono
                                             }
-                                            elide: Text.ElideRight
-                                            verticalAlignment: Text.AlignVCenter
-                                            font.pixelSize: Theme.typography.caption
-                                            font.family: Theme.typography.mono
                                         }
                                     }
                                 }

@@ -19,13 +19,21 @@ ComboBox {
         border.width: 1
     }
 
+    indicator: Icon {
+        name: "chevron-down"
+        color: Theme.faint
+        size: 14
+        x: control.width - width - Theme.space.sm
+        y: control.topPadding + (control.availableHeight - height) / 2
+    }
+
     contentItem: Text {
         text: control.displayText
         color: Theme.text
         font: control.font
         verticalAlignment: Text.AlignVCenter
         leftPadding: Theme.space.sm
-        rightPadding: Theme.space.sm
+        rightPadding: Theme.space.xl + Theme.space.xs
         elide: Text.ElideRight
     }
 

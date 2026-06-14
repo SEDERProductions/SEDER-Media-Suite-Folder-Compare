@@ -30,6 +30,7 @@ Button {
 
     readonly property bool _accentFill: variant === AppButton.Primary || (checkable && checked)
     readonly property bool _danger: variant === AppButton.Danger
+    readonly property color _contentColor: !control.enabled ? Theme.faint : ((control._accentFill || control._danger) ? Theme.accentText : Theme.text)
 
     font.family: control.mono ? Theme.typography.mono : Theme.typography.ui
     font.pixelSize: Theme.typography.body
@@ -60,16 +61,44 @@ Button {
         }
     }
 
-    contentItem: Text {
-        text: control.text
-        color: {
-            if (control._accentFill || control._danger)
-                return Theme.onAccent;
-            return control.enabled ? Theme.text : Theme.faint;
+    contentItem: Item {
+        implicitWidth: control.iconName.length > 0 ? iconRow.implicitWidth : plainText.implicitWidth
+        implicitHeight: control.iconName.length > 0 ? iconRow.implicitHeight : plainText.implicitHeight
+
+        // Icon-less buttons keep the original fill-and-elide centering.
+        Text {
+            id: plainText
+            visible: control.iconName.length === 0
+            anchors.fill: parent
+            text: control.text
+            color: control._contentColor
+            font: control.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
         }
-        font: control.font
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
+
+        // Icon buttons center the icon+label group.
+        Row {
+            id: iconRow
+            visible: control.iconName.length > 0
+            anchors.centerIn: parent
+            spacing: Theme.space.xs
+
+            Icon {
+                name: control.iconName
+                color: control._contentColor
+                size: 15
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Text {
+                visible: control.text.length > 0
+                text: control.text
+                color: control._contentColor
+                font: control.font
+                verticalAlignment: Text.AlignVCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
     }
 }
