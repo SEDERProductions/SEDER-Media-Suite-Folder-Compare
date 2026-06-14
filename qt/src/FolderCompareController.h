@@ -175,6 +175,9 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void saveLayout(const QVariantMap& layout);
     Q_INVOKABLE QVariantMap loadLayout() const;
 
+    // Media preview (Bucket E)
+    Q_INVOKABLE QVariantMap probeMedia(const QString& path) const;
+
     // Content diff (Bucket D4)
     Q_INVOKABLE QVariantList loadTextDiff(const QString& pathA, const QString& pathB);
     Q_INVOKABLE bool isTextFile(const QString& path) const;

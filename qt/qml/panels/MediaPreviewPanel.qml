@@ -28,6 +28,28 @@ Item {
         return /\.(png|jpe?g|gif|bmp|webp|tiff?)$/i.test(path);
     }
 
+    function fmtDuration(ms) {
+        var total = Math.round(ms / 1000);
+        var m = Math.floor(total / 60);
+        var s = total % 60;
+        return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function fmtMeta(m) {
+        if (!m || m.kind === undefined)
+            return "";
+        var parts = [];
+        if (m.width !== undefined)
+            parts.push(m.width + "×" + m.height + " px");
+        if (m.durationMs !== undefined)
+            parts.push(fmtDuration(m.durationMs));
+        if (m.codec !== undefined)
+            parts.push(m.codec);
+        if (m.sampleRate !== undefined)
+            parts.push((m.sampleRate / 1000).toFixed(1) + " kHz");
+        return parts.join("  ·  ");
+    }
+
     // Empty / folder state.
     ColumnLayout {
         anchors.centerIn: parent
@@ -86,6 +108,7 @@ Item {
                 delegate: ColumnLayout {
                     required property var modelData
                     readonly property bool showImage: modelData.has && root.isImage(modelData.path)
+                    readonly property var meta: (modelData.has && modelData.path.length > 0) ? folderController.probeMedia(modelData.path) : ({})
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.preferredWidth: 1
@@ -136,6 +159,25 @@ Item {
                                 text: !modelData.has ? qsTr("Not on this side") : qsTr("No preview")
                             }
                         }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: text.length > 0
+                        text: root.fmtMeta(parent.meta)
+                        color: Theme.muted
+                        font.family: Theme.typography.mono
+                        font.pixelSize: Theme.typography.caption
+                        wrapMode: Text.WordWrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: parent.meta && parent.meta.exif !== undefined
+                        text: (parent.meta && parent.meta.exif !== undefined) ? parent.meta.exif : ""
+                        color: Theme.faint
+                        font.family: Theme.typography.mono
+                        font.pixelSize: Theme.typography.caption
+                        elide: Text.ElideRight
                     }
                 }
             }
