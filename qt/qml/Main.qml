@@ -70,14 +70,15 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        // QSettings (INI) returns values untyped (as strings), so coerce here.
         var saved = folderController.loadLayout();
         if (saved && saved.workspace !== undefined) {
             activeWorkspace = saved.workspace;
             if (saved.settingsWidth !== undefined)
-                settingsPanel.SplitView.preferredWidth = saved.settingsWidth;
-            consolePanel.collapsed = saved.consoleCollapsed === true;
+                settingsPanel.SplitView.preferredWidth = Number(saved.settingsWidth);
+            consolePanel.collapsed = (saved.consoleCollapsed === true || saved.consoleCollapsed === "true");
             if (saved.consoleHeight !== undefined)
-                consolePanel.expandedHeight = saved.consoleHeight;
+                consolePanel.expandedHeight = Number(saved.consoleHeight);
             consolePanel.SplitView.preferredHeight = consolePanel.collapsed ? consolePanel.collapsedSize : consolePanel.expandedHeight;
         } else {
             applyWorkspace("Compare");
@@ -218,6 +219,7 @@ ApplicationWindow {
             id: settingsPanel
             title: qsTr("SETTINGS")
             iconName: "settings"
+            floatable: true
             SplitView.preferredWidth: window.leftRailWidth
             SplitView.minimumWidth: 280
             SplitView.maximumWidth: 520
@@ -479,6 +481,7 @@ ApplicationWindow {
                 id: resultsPanel
                 title: qsTr("RESULTS")
                 iconName: "folder-tree"
+                floatable: true
                 SplitView.fillHeight: true
                 SplitView.minimumHeight: 200
 
@@ -1017,6 +1020,7 @@ ApplicationWindow {
                 title: qsTr("CONSOLE")
                 iconName: "info"
                 collapsible: true
+                floatable: true
                 property real expandedHeight: Math.max(160, Math.round(window.height * 0.18))
                 SplitView.minimumHeight: collapsed ? collapsedSize : 90
                 SplitView.maximumHeight: collapsed ? collapsedSize : Infinity
