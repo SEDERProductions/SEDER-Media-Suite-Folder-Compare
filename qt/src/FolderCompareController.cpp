@@ -1349,6 +1349,27 @@ void FolderCompareController::deleteProfile(const QString& name) {
     addLog(QStringLiteral("Deleted profile '%1'.").arg(name));
 }
 
+void FolderCompareController::saveLayout(const QVariantMap& layout) {
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("workspace"));
+    for (auto it = layout.constBegin(); it != layout.constEnd(); ++it) {
+        settings.setValue(it.key(), it.value());
+    }
+    settings.endGroup();
+}
+
+QVariantMap FolderCompareController::loadLayout() const {
+    QSettings settings;
+    QVariantMap map;
+    settings.beginGroup(QStringLiteral("workspace"));
+    const QStringList keys = settings.childKeys();
+    for (const QString& key : keys) {
+        map.insert(key, settings.value(key));
+    }
+    settings.endGroup();
+    return map;
+}
+
 QVariantList FolderCompareController::loadTextDiff(const QString& pathA, const QString& pathB) {
     QVariantList result;
     const QByteArray a = pathA.toUtf8();

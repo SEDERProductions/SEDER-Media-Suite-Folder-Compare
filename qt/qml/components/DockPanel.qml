@@ -32,6 +32,10 @@ Item {
     default property alias content: contentHost.data
 
     signal floatRequested
+    signal collapseToggled
+
+    implicitWidth: 320
+    implicitHeight: 200
 
     // Small square header control (collapse / float).
     component HeaderBtn: Item {
@@ -130,7 +134,10 @@ Item {
                     visible: root.collapsible
                     glyph: root.collapsed ? "chevron-down" : "chevron-up"
                     Layout.alignment: Qt.AlignVCenter
-                    onClicked: root.collapsed = !root.collapsed
+                    onClicked: {
+                        root.collapsed = !root.collapsed;
+                        root.collapseToggled();
+                    }
                 }
             }
         }

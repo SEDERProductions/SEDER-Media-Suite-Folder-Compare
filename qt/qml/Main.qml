@@ -26,12 +26,65 @@ ApplicationWindow {
 
     color: Theme.gutter
 
+    property string activeWorkspace: "Compare"
+
     // Drive the global design-token theme from the controller's resolved mode.
     Binding {
         target: Theme
         property: "dark"
         value: folderController.effectiveDark
     }
+
+    // ── Workspace layout (presets + persistence) ──────────────────────────
+    function applyWorkspace(name) {
+        if (name === "Review") {
+            // Maximize the results area: narrow settings, collapsed console.
+            settingsPanel.SplitView.preferredWidth = Math.max(280, Math.round(width * 0.22));
+            consolePanel.collapsed = true;
+        } else if (name === "Triage") {
+            // Emphasize the log/console for sorting through issues.
+            settingsPanel.SplitView.preferredWidth = window.leftRailWidth;
+            consolePanel.collapsed = false;
+            consolePanel.expandedHeight = Math.round(height * 0.4);
+        } else {
+            // Compare (default): balanced layout.
+            settingsPanel.SplitView.preferredWidth = window.leftRailWidth;
+            consolePanel.collapsed = false;
+            consolePanel.expandedHeight = Math.max(160, Math.round(height * 0.18));
+        }
+        consolePanel.SplitView.preferredHeight = consolePanel.collapsed ? consolePanel.collapsedSize : consolePanel.expandedHeight;
+        activeWorkspace = name;
+        persistLayout();
+    }
+
+    function persistLayout() {
+        var consoleH = consolePanel.collapsed ? consolePanel.expandedHeight : consolePanel.height;
+        if (!consolePanel.collapsed && consoleH > consolePanel.collapsedSize)
+            consolePanel.expandedHeight = consoleH;
+        folderController.saveLayout({
+            "workspace": activeWorkspace,
+            "settingsWidth": settingsPanel.SplitView.preferredWidth,
+            "consoleHeight": consolePanel.expandedHeight,
+            "consoleCollapsed": consolePanel.collapsed
+        });
+    }
+
+    Component.onCompleted: {
+        var saved = folderController.loadLayout();
+        if (saved && saved.workspace !== undefined) {
+            activeWorkspace = saved.workspace;
+            if (saved.settingsWidth !== undefined)
+                settingsPanel.SplitView.preferredWidth = saved.settingsWidth;
+            consolePanel.collapsed = saved.consoleCollapsed === true;
+            if (saved.consoleHeight !== undefined)
+                consolePanel.expandedHeight = saved.consoleHeight;
+            consolePanel.SplitView.preferredHeight = consolePanel.collapsed ? consolePanel.collapsedSize : consolePanel.expandedHeight;
+        } else {
+            applyWorkspace("Compare");
+        }
+    }
+
+    onClosing: persistLayout()
 
     function filterCount(index) {
         switch (index) {
@@ -106,11 +159,60 @@ ApplicationWindow {
     }
 
     // ── Dockable workspace ────────────────────────────────────────────────
-    SplitView {
-        id: workspace
+    ColumnLayout {
         anchors.fill: parent
-        orientation: Qt.Horizontal
-        handle: splitHandle
+        spacing: 0
+
+        // Workspace switcher (mirrors Premiere's workspace bar).
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 38
+            color: Theme.gutter
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.space.md
+                anchors.rightMargin: Theme.space.sm
+                spacing: Theme.space.xs
+
+                Label {
+                    text: qsTr("WORKSPACE")
+                    color: Theme.faint
+                    font.family: Theme.typography.mono
+                    font.pixelSize: Theme.typography.caption
+                    Layout.rightMargin: Theme.space.sm
+                }
+                Repeater {
+                    model: ["Compare", "Review", "Triage"]
+                    delegate: AppButton {
+                        required property string modelData
+                        variant: AppButton.Ghost
+                        checkable: true
+                        checked: window.activeWorkspace === modelData
+                        text: modelData
+                        onClicked: window.applyWorkspace(modelData)
+                    }
+                }
+                Item {
+                    Layout.fillWidth: true
+                }
+                AppButton {
+                    variant: AppButton.Ghost
+                    iconName: "undo"
+                    text: qsTr("Reset")
+                    onClicked: window.applyWorkspace(window.activeWorkspace)
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Reset this workspace to its default layout")
+                }
+            }
+        }
+
+        SplitView {
+            id: workspace
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            orientation: Qt.Horizontal
+            handle: splitHandle
 
         DockPanel {
             id: settingsPanel
@@ -915,9 +1017,13 @@ ApplicationWindow {
                 title: qsTr("CONSOLE")
                 iconName: "info"
                 collapsible: true
+                property real expandedHeight: Math.max(160, Math.round(window.height * 0.18))
                 SplitView.minimumHeight: collapsed ? collapsedSize : 90
-                SplitView.preferredHeight: collapsed ? collapsedSize : Math.max(160, window.height * 0.18)
                 SplitView.maximumHeight: collapsed ? collapsedSize : Infinity
+                onCollapseToggled: {
+                    SplitView.preferredHeight = collapsed ? collapsedSize : expandedHeight;
+                    window.persistLayout();
+                }
 
                 ColumnLayout {
                     id: statusPanel
@@ -1013,6 +1119,7 @@ ApplicationWindow {
                 }
             }
         }
+    }
     }
 
     // ── Context menu ─────────────────────────────────────────────────────

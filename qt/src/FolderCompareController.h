@@ -171,6 +171,10 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE bool loadProfile(const QString& name);
     Q_INVOKABLE void deleteProfile(const QString& name);
 
+    // Workspace layout persistence (Bucket D2)
+    Q_INVOKABLE void saveLayout(const QVariantMap& layout);
+    Q_INVOKABLE QVariantMap loadLayout() const;
+
     // Content diff (Bucket D4)
     Q_INVOKABLE QVariantList loadTextDiff(const QString& pathA, const QString& pathB);
     Q_INVOKABLE bool isTextFile(const QString& path) const;
