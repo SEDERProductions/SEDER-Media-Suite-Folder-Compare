@@ -58,6 +58,8 @@ set(APP_SOURCES
     src/FolderCompareUtils.h
     src/FolderTransferWorker.cpp
     src/FolderTransferWorker.h
+    src/ThumbnailImageProvider.cpp
+    src/ThumbnailImageProvider.h
 )
 
 set(SEDER_APP_ICON_MACOS "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.icns")
@@ -107,6 +109,7 @@ qt_add_qml_module(seder-folder-compare-qt
         qml/components/Icon.qml
         qml/components/IconPaths.qml
         qml/components/DockPanel.qml
+        qml/panels/MediaPreviewPanel.qml
 )
 
 # ── Translations ─────────────────────────────────────────────────────────────

@@ -27,6 +27,7 @@ ApplicationWindow {
     color: Theme.gutter
 
     property string activeWorkspace: "Compare"
+    property var previewNode: null
 
     // Drive the global design-token theme from the controller's resolved mode.
     Binding {
@@ -38,17 +39,20 @@ ApplicationWindow {
     // ── Workspace layout (presets + persistence) ──────────────────────────
     function applyWorkspace(name) {
         if (name === "Review") {
-            // Maximize the results area: narrow settings, collapsed console.
-            settingsPanel.SplitView.preferredWidth = Math.max(280, Math.round(width * 0.22));
+            // Media-review focus: wide preview, collapsed console.
+            settingsPanel.SplitView.preferredWidth = Math.max(280, Math.round(width * 0.2));
+            mediaPanel.SplitView.preferredWidth = Math.round(width * 0.34);
             consolePanel.collapsed = true;
         } else if (name === "Triage") {
             // Emphasize the log/console for sorting through issues.
             settingsPanel.SplitView.preferredWidth = window.leftRailWidth;
+            mediaPanel.SplitView.preferredWidth = 240;
             consolePanel.collapsed = false;
             consolePanel.expandedHeight = Math.round(height * 0.4);
         } else {
             // Compare (default): balanced layout.
             settingsPanel.SplitView.preferredWidth = window.leftRailWidth;
+            mediaPanel.SplitView.preferredWidth = 340;
             consolePanel.collapsed = false;
             consolePanel.expandedHeight = Math.max(160, Math.round(height * 0.18));
         }
@@ -64,6 +68,7 @@ ApplicationWindow {
         folderController.saveLayout({
             "workspace": activeWorkspace,
             "settingsWidth": settingsPanel.SplitView.preferredWidth,
+            "mediaWidth": mediaPanel.SplitView.preferredWidth,
             "consoleHeight": consolePanel.expandedHeight,
             "consoleCollapsed": consolePanel.collapsed
         });
@@ -76,6 +81,8 @@ ApplicationWindow {
             activeWorkspace = saved.workspace;
             if (saved.settingsWidth !== undefined)
                 settingsPanel.SplitView.preferredWidth = Number(saved.settingsWidth);
+            if (saved.mediaWidth !== undefined)
+                mediaPanel.SplitView.preferredWidth = Number(saved.mediaWidth);
             consolePanel.collapsed = (saved.consoleCollapsed === true || saved.consoleCollapsed === "true");
             if (saved.consoleHeight !== undefined)
                 consolePanel.expandedHeight = Number(saved.consoleHeight);
@@ -103,6 +110,21 @@ ApplicationWindow {
             return folderController.folderDiffCount;
         }
         return 0;
+    }
+
+    function isImageName(n) {
+        return /\.(png|jpe?g|gif|bmp|webp|tiff?)$/i.test(n);
+    }
+
+    // Absolute path of a tree node for thumbnailing, preferring the A side.
+    function rowThumbPath(node) {
+        var rel = node.relPath || "";
+        var hasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4;
+        if (hasA && folderController.folderA.length > 0)
+            return folderController.folderA + "/" + rel;
+        if (folderController.folderB.length > 0)
+            return folderController.folderB + "/" + rel;
+        return "";
     }
 
     readonly property bool isMac: Qt.platform.os === "osx"
@@ -477,13 +499,19 @@ ApplicationWindow {
             handle: splitHandle
             SplitView.fillWidth: true
 
-            DockPanel {
-                id: resultsPanel
-                title: qsTr("RESULTS")
-                iconName: "folder-tree"
-                floatable: true
+            SplitView {
+                id: centerRow
+                orientation: Qt.Horizontal
+                handle: splitHandle
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: 200
+
+                DockPanel {
+                    id: resultsPanel
+                    title: qsTr("RESULTS")
+                    iconName: "folder-tree"
+                    floatable: true
+                    SplitView.fillWidth: true
+                    SplitView.minimumWidth: 360
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -826,6 +854,18 @@ ApplicationWindow {
                                                         return Theme.faint;
                                                     }
                                                 }
+                                                Image {
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    visible: !node.isFolder && window.isImageName(node.name)
+                                                    Layout.preferredWidth: visible ? 22 : 0
+                                                    Layout.preferredHeight: 22
+                                                    sourceSize.width: 44
+                                                    sourceSize.height: 44
+                                                    fillMode: Image.PreserveAspectFit
+                                                    asynchronous: true
+                                                    cache: true
+                                                    source: visible ? ("image://thumb/" + encodeURIComponent(window.rowThumbPath(node))) : ""
+                                                }
                                                 Text {
                                                     Layout.fillWidth: true
                                                     text: node.name
@@ -944,6 +984,7 @@ ApplicationWindow {
                                         hoverEnabled: true
                                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                                         onClicked: function (mouse) {
+                                            window.previewNode = node;
                                             if (node.isFolder && node.children.length > 0) {
                                                 treeModel.toggleExpanded(node.relPath);
                                             }
@@ -1011,6 +1052,21 @@ ApplicationWindow {
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+                DockPanel {
+                    id: mediaPanel
+                    title: qsTr("PREVIEW")
+                    iconName: "eye"
+                    floatable: true
+                    SplitView.preferredWidth: 340
+                    SplitView.minimumWidth: 220
+
+                    MediaPreviewPanel {
+                        anchors.fill: parent
+                        node: window.previewNode
                     }
                 }
             }
