@@ -28,6 +28,7 @@ ApplicationWindow {
 
     property string activeWorkspace: "Compare"
     property var previewNode: null
+    property string resultsView: "list"
 
     // Drive the global design-token theme from the controller's resolved mode.
     Binding {
@@ -702,8 +703,37 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         spacing: 0
 
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Theme.space.sm
+                            Layout.rightMargin: Theme.space.sm
+                            Layout.topMargin: Theme.space.xs
+                            Layout.bottomMargin: Theme.space.xs
+                            spacing: Theme.space.xs
+                            Item {
+                                Layout.fillWidth: true
+                            }
+                            AppButton {
+                                variant: AppButton.Ghost
+                                checkable: true
+                                checked: window.resultsView === "list"
+                                iconName: "panel-bottom"
+                                text: qsTr("List")
+                                onClicked: window.resultsView = "list"
+                            }
+                            AppButton {
+                                variant: AppButton.Ghost
+                                checkable: true
+                                checked: window.resultsView === "grid"
+                                iconName: "split"
+                                text: qsTr("Grid")
+                                onClicked: window.resultsView = "grid"
+                            }
+                        }
+
                         Row {
                             Layout.fillWidth: true
+                            visible: window.resultsView === "list"
                             height: 30
                             Rectangle {
                                 width: 30
@@ -785,6 +815,7 @@ ApplicationWindow {
                             ListView {
                                 id: treeView
                                 anchors.fill: parent
+                                visible: window.resultsView === "list"
                                 clip: true
                                 model: treeModel.flatItems
                                 boundsBehavior: Flickable.StopAtBounds
@@ -1042,6 +1073,106 @@ ApplicationWindow {
                                 }
 
                                 ScrollBar.vertical: ScrollBar {}
+                            }
+
+                            GridView {
+                                id: resultsGrid
+                                anchors.fill: parent
+                                visible: window.resultsView === "grid"
+                                clip: true
+                                model: treeModel.flatItems
+                                cellWidth: 150
+                                cellHeight: 150
+                                boundsBehavior: Flickable.StopAtBounds
+                                ScrollBar.vertical: ScrollBar {}
+
+                                delegate: Item {
+                                    id: cell
+                                    required property int index
+                                    required property var modelData
+                                    readonly property var node: modelData
+                                    readonly property bool isImg: !cell.node.isFolder && window.isImageName(cell.node.name)
+                                    width: resultsGrid.cellWidth
+                                    height: resultsGrid.cellHeight
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.margins: 5
+                                        radius: Theme.radius.md
+                                        color: cardHover.hovered ? Theme.panelAlt : Theme.panel
+                                        border.color: cardHover.hovered ? Theme.accent : Theme.line
+                                        border.width: 1
+                                        Behavior on border.color {
+                                            ColorAnimation {
+                                                duration: Theme.motion.fast
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: Theme.space.sm
+                                            spacing: Theme.space.xs
+
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                radius: Theme.radius.sm
+                                                color: Theme.bg
+                                                clip: true
+                                                Image {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 2
+                                                    visible: cell.isImg
+                                                    source: cell.isImg ? ("image://thumb/" + encodeURIComponent(window.rowThumbPath(cell.node))) : ""
+                                                    sourceSize.width: 256
+                                                    sourceSize.height: 256
+                                                    fillMode: Image.PreserveAspectFit
+                                                    asynchronous: true
+                                                    cache: true
+                                                }
+                                                Icon {
+                                                    anchors.centerIn: parent
+                                                    visible: !cell.isImg
+                                                    size: 34
+                                                    color: Theme.faint
+                                                    name: cell.node.isFolder ? "folder" : (/\.(mp4|mov|mkv|avi|webm|m4v|mxf|wmv|ts)$/i.test(cell.node.name) ? "video" : (/\.(wav|mp3|flac|ogg|m4a|aiff?|wv|ape)$/i.test(cell.node.name) ? "audio" : "file"))
+                                                }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: Theme.space.xs
+                                                Rectangle {
+                                                    width: 8
+                                                    height: 8
+                                                    radius: 4
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    color: Theme.statusColor(cell.node.aggregateStatus !== undefined ? cell.node.aggregateStatus : cell.node.status)
+                                                }
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    text: cell.node.name
+                                                    color: Theme.text
+                                                    elide: Text.ElideMiddle
+                                                    font.pixelSize: Theme.typography.caption
+                                                    font.family: Theme.typography.mono
+                                                }
+                                            }
+                                        }
+
+                                        HoverHandler {
+                                            id: cardHover
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                window.previewNode = cell.node;
+                                                if (cell.node.isFolder && cell.node.children.length > 0)
+                                                    treeModel.toggleExpanded(cell.node.relPath);
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             Rectangle {
