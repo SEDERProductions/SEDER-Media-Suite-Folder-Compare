@@ -42,9 +42,8 @@ class ThumbnailResponse final : public QQuickImageResponse, public QRunnable {
             return;
         }
 
-        const QString cacheDir =
-            QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
-            QStringLiteral("/thumbnails");
+        const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
+                                 QStringLiteral("/thumbnails");
         QDir().mkpath(cacheDir);
         const QString key = QStringLiteral("%1|%2|%3|%4x%5")
                                 .arg(m_path)
