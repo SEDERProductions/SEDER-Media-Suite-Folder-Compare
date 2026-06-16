@@ -1349,6 +1349,63 @@ void FolderCompareController::deleteProfile(const QString& name) {
     addLog(QStringLiteral("Deleted profile '%1'.").arg(name));
 }
 
+void FolderCompareController::saveLayout(const QVariantMap& layout) {
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("workspace"));
+    for (auto it = layout.constBegin(); it != layout.constEnd(); ++it) {
+        settings.setValue(it.key(), it.value());
+    }
+    settings.endGroup();
+}
+
+QVariantMap FolderCompareController::loadLayout() const {
+    QSettings settings;
+    QVariantMap map;
+    settings.beginGroup(QStringLiteral("workspace"));
+    const QStringList keys = settings.childKeys();
+    for (const QString& key : keys) {
+        map.insert(key, settings.value(key));
+    }
+    settings.endGroup();
+    return map;
+}
+
+QVariantMap FolderCompareController::probeMedia(const QString& path) const {
+    QVariantMap map;
+    if (path.isEmpty()) {
+        return map;
+    }
+    const QByteArray pathUtf8 = path.toUtf8();
+    char* error = nullptr;
+    SfcMediaInfo* info = sfc_media_probe(pathUtf8.constData(), &error);
+    if (error) {
+        sfc_string_free(error);
+    }
+    if (!info) {
+        return map;
+    }
+    const SfcMediaInfoData data = sfc_media_info_data(info);
+    map.insert(QStringLiteral("kind"), data.kind);
+    if (data.has_dimensions) {
+        map.insert(QStringLiteral("width"), static_cast<uint>(data.width));
+        map.insert(QStringLiteral("height"), static_cast<uint>(data.height));
+    }
+    if (data.has_duration) {
+        map.insert(QStringLiteral("durationMs"), static_cast<uint>(data.duration_ms));
+    }
+    if (data.has_sample_rate) {
+        map.insert(QStringLiteral("sampleRate"), static_cast<uint>(data.sample_rate));
+    }
+    if (data.codec) {
+        map.insert(QStringLiteral("codec"), QString::fromUtf8(data.codec));
+    }
+    if (data.exif) {
+        map.insert(QStringLiteral("exif"), QString::fromUtf8(data.exif));
+    }
+    sfc_media_info_free(info);
+    return map;
+}
+
 QVariantList FolderCompareController::loadTextDiff(const QString& pathA, const QString& pathB) {
     QVariantList result;
     const QByteArray a = pathA.toUtf8();

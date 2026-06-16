@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "FolderCompareController.h"
+#include "ThumbnailImageProvider.h"
 
 #include <QApplication>
 #include <QIcon>
@@ -43,8 +44,9 @@ int main(int argc, char* argv[]) {
     FolderCompareController controller;
 
     QQmlApplicationEngine engine;
+    engine.addImageProvider(QStringLiteral("thumb"), new ThumbnailImageProvider);
     engine.rootContext()->setContextProperty(QStringLiteral("folderController"), &controller);
-    engine.load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
+    engine.loadFromModule("Seder.UI", "Main");
     if (engine.rootObjects().isEmpty()) {
         return 1;
     }

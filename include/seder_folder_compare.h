@@ -207,6 +207,30 @@ bool sfc_is_text_file(const char *path);
 // Caller passes a buffer of `length` bytes; returns number of bytes read (<= length).
 size_t sfc_hex_window(const char *path, uint64_t offset, uint8_t *out, size_t length);
 
+// ── Media probe ──────────────────────────────────────────────────────────────
+
+typedef struct SfcMediaInfo SfcMediaInfo;
+
+typedef struct {
+    int32_t kind; // 0 = none/other, 1 = image, 2 = audio, 3 = video
+    bool has_dimensions;
+    uint32_t width;
+    uint32_t height;
+    bool has_duration;
+    uint32_t duration_ms;
+    bool has_sample_rate;
+    uint32_t sample_rate;
+    bool has_phash;
+    uint64_t phash;
+    const char *codec; // borrowed from the handle; valid until it is freed
+    const char *exif;
+} SfcMediaInfoData;
+
+// Returns an owned handle (kind 0 for non-media files) or null on error.
+SfcMediaInfo *sfc_media_probe(const char *path, char **error_out);
+SfcMediaInfoData sfc_media_info_data(const SfcMediaInfo *info);
+void sfc_media_info_free(SfcMediaInfo *info);
+
 #ifdef __cplusplus
 }
 #endif

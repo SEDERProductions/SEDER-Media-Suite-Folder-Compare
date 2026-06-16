@@ -961,3 +961,36 @@ fn copy_file_write_error_keeps_existing_destination_unchanged() {
     );
     assert_eq!(fs::read_to_string(&dest).unwrap(), "original-destination");
 }
+
+#[test]
+fn ffi_media_probe_roundtrip_and_free() {
+    use std::ffi::CString;
+    use std::os::raw::c_char;
+    use std::ptr;
+
+    let dir = tempdir().unwrap();
+    let txt = dir.path().join("notes.txt");
+    write(&txt, "hello");
+
+    // Non-media file: a handle is returned with kind 0 and no dimensions.
+    let path_c = CString::new(txt.to_str().unwrap()).unwrap();
+    let mut err: *mut c_char = ptr::null_mut();
+    let handle = unsafe { crate::ffi::sfc_media_probe(path_c.as_ptr(), &mut err) };
+    assert!(!handle.is_null());
+    assert!(err.is_null());
+    let data = unsafe { crate::ffi::sfc_media_info_data(handle) };
+    assert_eq!(data.kind, 0);
+    assert!(!data.has_dimensions);
+    assert!(data.codec.is_null());
+    unsafe { crate::ffi::sfc_media_info_free(handle) };
+
+    // Null path: null handle and a freeable error message.
+    let mut err2: *mut c_char = ptr::null_mut();
+    let null_handle = unsafe { crate::ffi::sfc_media_probe(ptr::null(), &mut err2) };
+    assert!(null_handle.is_null());
+    assert!(!err2.is_null());
+    unsafe { crate::ffi::sfc_string_free(err2) };
+
+    // Freeing null handles is a no-op.
+    unsafe { crate::ffi::sfc_media_info_free(ptr::null_mut()) };
+}

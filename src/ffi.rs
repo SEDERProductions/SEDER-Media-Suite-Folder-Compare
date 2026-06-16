@@ -341,6 +341,155 @@ pub unsafe extern "C" fn sfc_string_free(value: *mut c_char) {
     }
 }
 
+// ── Media probe ────────────────────────────────────────────────────────────
+
+/// Owned, opaque media-info handle. Free with `sfc_media_info_free`.
+pub struct SfcMediaInfo {
+    kind: i32,
+    has_dimensions: bool,
+    width: u32,
+    height: u32,
+    has_duration: bool,
+    duration_ms: u32,
+    has_sample_rate: bool,
+    sample_rate: u32,
+    has_phash: bool,
+    phash: u64,
+    codec: Option<CString>,
+    exif: Option<CString>,
+}
+
+/// Plain-data view of `SfcMediaInfo`. `codec`/`exif` borrow from the owning
+/// handle and stay valid until it is freed.
+#[repr(C)]
+pub struct SfcMediaInfoData {
+    pub kind: i32, // 0 = none/other, 1 = image, 2 = audio, 3 = video
+    pub has_dimensions: bool,
+    pub width: u32,
+    pub height: u32,
+    pub has_duration: bool,
+    pub duration_ms: u32,
+    pub has_sample_rate: bool,
+    pub sample_rate: u32,
+    pub has_phash: bool,
+    pub phash: u64,
+    pub codec: *const c_char,
+    pub exif: *const c_char,
+}
+
+fn media_kind_to_i32(kind: crate::media::MediaKind) -> i32 {
+    match kind {
+        crate::media::MediaKind::Other => 0,
+        crate::media::MediaKind::Image => 1,
+        crate::media::MediaKind::Audio => 2,
+        crate::media::MediaKind::Video => 3,
+    }
+}
+
+/// Probe a media file. Returns an owned handle (kind 0 for non-media files) or
+/// null on error (with `error_out` set). SAFETY: `path` must be a valid C
+/// string; `error_out` must be null or a writable `*mut c_char`.
+#[no_mangle]
+pub unsafe extern "C" fn sfc_media_probe(
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut SfcMediaInfo {
+    let path = match unsafe { cstr_to_string(path, "path") } {
+        Ok(value) => value,
+        Err(error) => {
+            unsafe { set_error(error_out, error.to_string()) };
+            return ptr::null_mut();
+        }
+    };
+
+    match crate::media::probe(Path::new(&path)) {
+        Ok(Some(info)) => Box::into_raw(Box::new(SfcMediaInfo {
+            kind: media_kind_to_i32(info.kind),
+            has_dimensions: info.width.is_some() && info.height.is_some(),
+            width: info.width.unwrap_or(0),
+            height: info.height.unwrap_or(0),
+            has_duration: info.duration_ms.is_some(),
+            duration_ms: info.duration_ms.unwrap_or(0),
+            has_sample_rate: info.sample_rate.is_some(),
+            sample_rate: info.sample_rate.unwrap_or(0),
+            has_phash: info.phash.is_some(),
+            phash: info.phash.unwrap_or(0),
+            codec: info.codec.map(|value| sanitized_cstring(&value)),
+            exif: info.exif_datetime.map(|value| sanitized_cstring(&value)),
+        })),
+        Ok(None) => Box::into_raw(Box::new(SfcMediaInfo {
+            kind: 0,
+            has_dimensions: false,
+            width: 0,
+            height: 0,
+            has_duration: false,
+            duration_ms: 0,
+            has_sample_rate: false,
+            sample_rate: 0,
+            has_phash: false,
+            phash: 0,
+            codec: None,
+            exif: None,
+        })),
+        Err(error) => {
+            unsafe { set_error(error_out, error.to_string()) };
+            ptr::null_mut()
+        }
+    }
+}
+
+/// SAFETY: `info` must be null or a handle from `sfc_media_probe`.
+#[no_mangle]
+pub unsafe extern "C" fn sfc_media_info_data(info: *const SfcMediaInfo) -> SfcMediaInfoData {
+    if info.is_null() {
+        return SfcMediaInfoData {
+            kind: 0,
+            has_dimensions: false,
+            width: 0,
+            height: 0,
+            has_duration: false,
+            duration_ms: 0,
+            has_sample_rate: false,
+            sample_rate: 0,
+            has_phash: false,
+            phash: 0,
+            codec: ptr::null(),
+            exif: ptr::null(),
+        };
+    }
+    let info = unsafe { &*info };
+    SfcMediaInfoData {
+        kind: info.kind,
+        has_dimensions: info.has_dimensions,
+        width: info.width,
+        height: info.height,
+        has_duration: info.has_duration,
+        duration_ms: info.duration_ms,
+        has_sample_rate: info.has_sample_rate,
+        sample_rate: info.sample_rate,
+        has_phash: info.has_phash,
+        phash: info.phash,
+        codec: info
+            .codec
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(ptr::null()),
+        exif: info
+            .exif
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(ptr::null()),
+    }
+}
+
+/// SAFETY: `info` must be null or a handle from `sfc_media_probe`.
+#[no_mangle]
+pub unsafe extern "C" fn sfc_media_info_free(info: *mut SfcMediaInfo) {
+    if !info.is_null() {
+        drop(unsafe { Box::from_raw(info) });
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn sfc_report_row_count(report: *const FfiReport) -> usize {
     unsafe { report_ref(report) }
