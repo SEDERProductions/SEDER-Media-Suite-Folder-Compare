@@ -789,19 +789,59 @@ ApplicationWindow {
                                 model: treeModel.flatItems
                                 boundsBehavior: Flickable.StopAtBounds
                                 spacing: 0
+                                currentIndex: -1
+                                keyNavigationEnabled: true
+                                activeFocusOnTab: true
+                                highlightMoveDuration: 0
+
+                                function activateCurrent() {
+                                    var n = treeModel.flatItems[currentIndex];
+                                    if (!n)
+                                        return;
+                                    if (n.isFolder && n.children.length > 0)
+                                        treeModel.toggleExpanded(n.relPath);
+                                    else
+                                        folderController.openFile(folderController.folderA + "/" + n.relPath);
+                                }
+                                onCurrentIndexChanged: {
+                                    if (currentIndex >= 0 && currentIndex < treeModel.flatItems.length)
+                                        window.previewNode = treeModel.flatItems[currentIndex];
+                                }
+                                Keys.onReturnPressed: activateCurrent()
+                                Keys.onEnterPressed: activateCurrent()
+                                Keys.onRightPressed: {
+                                    var n = treeModel.flatItems[currentIndex];
+                                    if (n && n.isFolder && !n.expanded && n.children.length > 0)
+                                        treeModel.toggleExpanded(n.relPath);
+                                }
+                                Keys.onLeftPressed: {
+                                    var n = treeModel.flatItems[currentIndex];
+                                    if (n && n.isFolder && n.expanded)
+                                        treeModel.toggleExpanded(n.relPath);
+                                }
 
                                 delegate: Rectangle {
                                     required property int index
                                     required property var modelData
                                     readonly property var node: modelData
                                     readonly property bool hovered: rowMouse.containsMouse
+                                    readonly property bool current: ListView.isCurrentItem
                                     readonly property color baseColor: index % 2 === 0 ? Theme.panel : Theme.panelAlt
                                     readonly property color hoverColor: window.darkMode ? Qt.lighter(baseColor, 1.08) : Qt.darker(baseColor, 1.05)
                                     implicitWidth: treeView.width
                                     implicitHeight: 30
-                                    color: hovered ? hoverColor : baseColor
+                                    color: current ? (window.darkMode ? Qt.lighter(baseColor, 1.2) : Qt.darker(baseColor, 1.12)) : (hovered ? hoverColor : baseColor)
                                     border.color: Theme.line
                                     border.width: 1
+
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: 3
+                                        color: Theme.accent
+                                        visible: parent.current
+                                    }
 
                                     Behavior on color {
                                         ColorAnimation {
@@ -984,6 +1024,8 @@ ApplicationWindow {
                                         hoverEnabled: true
                                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                                         onClicked: function (mouse) {
+                                            treeView.currentIndex = index;
+                                            treeView.forceActiveFocus();
                                             window.previewNode = node;
                                             if (node.isFolder && node.children.length > 0) {
                                                 treeModel.toggleExpanded(node.relPath);
@@ -1155,21 +1197,34 @@ ApplicationWindow {
 
                         delegate: Rectangle {
                             required property string modelData
+                            readonly property bool isError: modelData.indexOf("[ERROR]") >= 0
+                            readonly property bool isWarn: modelData.indexOf("[WARN]") >= 0
                             width: ListView.view.width
                             radius: Theme.radius.sm
-                            color: modelData.indexOf("[ERROR]") >= 0 ? Theme.logErrorBg : (modelData.indexOf("[WARN]") >= 0 ? Theme.logWarnBg : "transparent")
+                            color: isError ? Theme.logErrorBg : (isWarn ? Theme.logWarnBg : "transparent")
 
                             implicitHeight: logText.implicitHeight + 6
+
+                            // Severity stripe.
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: 3
+                                radius: Theme.radius.sm
+                                visible: parent.isError || parent.isWarn
+                                color: parent.isError ? Theme.bad : Theme.warn
+                            }
 
                             Text {
                                 id: logText
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                anchors.leftMargin: 6
+                                anchors.leftMargin: (parent.isError || parent.isWarn) ? 10 : 6
                                 anchors.rightMargin: 6
                                 text: modelData
-                                color: modelData.indexOf("[ERROR]") >= 0 ? Theme.logErrorText : (modelData.indexOf("[WARN]") >= 0 ? Theme.logWarnText : Theme.text)
+                                color: parent.isError ? Theme.logErrorText : (parent.isWarn ? Theme.logWarnText : Theme.text)
                                 elide: Text.ElideRight
                                 font.pixelSize: Theme.typography.caption
                                 font.family: Theme.typography.mono
@@ -1695,6 +1750,241 @@ ApplicationWindow {
                     onClicked: {
                         folderController.confirmOverwrite("cancel");
                         overwriteDialog.close();
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Command palette (Ctrl/Cmd+K) ──────────────────────────────────────
+
+    Shortcut {
+        sequence: window.isMac ? "Meta+K" : "Ctrl+K"
+        onActivated: {
+            commandPalette.refresh();
+            commandPalette.open();
+        }
+    }
+
+    Popup {
+        id: commandPalette
+        modal: true
+        focus: true
+        width: Math.min(parent.width * 0.6, 560)
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round(parent.height * 0.12)
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        property var commands: []
+        property string query: ""
+
+        function refresh() {
+            commands = [
+                {
+                    "title": qsTr("Start comparison"),
+                    "icon": "play",
+                    "run": function () {
+                        folderController.startComparison();
+                    }
+                },
+                {
+                    "title": qsTr("Cancel comparison"),
+                    "icon": "stop",
+                    "run": function () {
+                        folderController.cancelComparison();
+                    }
+                },
+                {
+                    "title": qsTr("Choose Folder A…"),
+                    "icon": "folder",
+                    "run": function () {
+                        folderController.chooseFolderA();
+                    }
+                },
+                {
+                    "title": qsTr("Choose Folder B…"),
+                    "icon": "folder",
+                    "run": function () {
+                        folderController.chooseFolderB();
+                    }
+                },
+                {
+                    "title": qsTr("Export report (TXT)"),
+                    "icon": "file-text",
+                    "run": function () {
+                        folderController.exportTxt();
+                    }
+                },
+                {
+                    "title": qsTr("Export report (CSV)"),
+                    "icon": "file-csv",
+                    "run": function () {
+                        folderController.exportCsv();
+                    }
+                },
+                {
+                    "title": qsTr("Open sync planner"),
+                    "icon": "sync",
+                    "run": function () {
+                        syncDialog.rebuild();
+                        syncDialog.open();
+                    }
+                },
+                {
+                    "title": qsTr("Clear log"),
+                    "icon": "trash",
+                    "run": function () {
+                        folderController.clearLog();
+                    }
+                },
+                {
+                    "title": qsTr("Workspace: Compare"),
+                    "icon": "split",
+                    "run": function () {
+                        window.applyWorkspace("Compare");
+                    }
+                },
+                {
+                    "title": qsTr("Workspace: Review"),
+                    "icon": "split",
+                    "run": function () {
+                        window.applyWorkspace("Review");
+                    }
+                },
+                {
+                    "title": qsTr("Workspace: Triage"),
+                    "icon": "split",
+                    "run": function () {
+                        window.applyWorkspace("Triage");
+                    }
+                },
+                {
+                    "title": qsTr("Theme: System"),
+                    "icon": "theme-system",
+                    "run": function () {
+                        folderController.theme = "system";
+                    }
+                },
+                {
+                    "title": qsTr("Theme: Light"),
+                    "icon": "theme-light",
+                    "run": function () {
+                        folderController.theme = "light";
+                    }
+                },
+                {
+                    "title": qsTr("Theme: Dark"),
+                    "icon": "theme-dark",
+                    "run": function () {
+                        folderController.theme = "dark";
+                    }
+                }
+            ];
+        }
+
+        function filtered() {
+            if (query.length === 0)
+                return commands;
+            var q = query.toLowerCase();
+            return commands.filter(function (c) {
+                return c.title.toLowerCase().indexOf(q) >= 0;
+            });
+        }
+
+        function runCurrent() {
+            var items = filtered();
+            if (commandList.currentIndex >= 0 && commandList.currentIndex < items.length) {
+                var cmd = items[commandList.currentIndex];
+                close();
+                cmd.run();
+            }
+        }
+
+        onOpened: {
+            query = "";
+            paletteSearch.text = "";
+            commandList.currentIndex = 0;
+            paletteSearch.forceActiveFocus();
+        }
+
+        background: Rectangle {
+            color: Theme.panel
+            border.color: Theme.line
+            border.width: 1
+            radius: Theme.radius.lg
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            AppTextField {
+                id: paletteSearch
+                Layout.fillWidth: true
+                Layout.margins: Theme.space.sm
+                placeholderText: qsTr("Type a command…")
+                onTextChanged: {
+                    commandPalette.query = text;
+                    commandList.currentIndex = 0;
+                }
+                Keys.onDownPressed: commandList.incrementCurrentIndex()
+                Keys.onUpPressed: commandList.decrementCurrentIndex()
+                Keys.onReturnPressed: commandPalette.runCurrent()
+                Keys.onEnterPressed: commandPalette.runCurrent()
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Theme.line
+            }
+
+            ListView {
+                id: commandList
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(contentHeight, 320)
+                clip: true
+                model: commandPalette.filtered()
+                currentIndex: 0
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {}
+
+                delegate: Rectangle {
+                    id: cmdRow
+                    required property int index
+                    required property var modelData
+                    readonly property bool current: ListView.isCurrentItem
+                    width: ListView.view.width
+                    height: 36
+                    color: current ? Theme.accent : (rowHover.hovered ? Theme.panelAlt : "transparent")
+
+                    HoverHandler {
+                        id: rowHover
+                    }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.space.md
+                        anchors.rightMargin: Theme.space.md
+                        spacing: Theme.space.sm
+                        Icon {
+                            name: cmdRow.modelData.icon
+                            size: 15
+                            color: cmdRow.current ? Theme.accentText : Theme.muted
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: cmdRow.modelData.title
+                            color: cmdRow.current ? Theme.accentText : Theme.text
+                            font.pixelSize: Theme.typography.label
+                            elide: Text.ElideRight
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            commandList.currentIndex = index;
+                            commandPalette.runCurrent();
+                        }
                     }
                 }
             }
