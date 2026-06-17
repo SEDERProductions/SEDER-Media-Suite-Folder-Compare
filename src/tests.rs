@@ -205,7 +205,7 @@ fn progress_reports_scan_checksum_compare_and_complete() {
             true,
             vec![],
             CompareTolerance::default(),
-            false,
+            SymlinkPolicy::FollowInTreeOnly,
             false,
             &mut callbacks,
         )
@@ -241,7 +241,7 @@ fn comparison_can_be_canceled() {
         true,
         vec![],
         CompareTolerance::default(),
-        false,
+        SymlinkPolicy::FollowInTreeOnly,
         false,
         &mut callbacks,
     )
@@ -671,7 +671,7 @@ fn modified_time_within_tolerance_is_matching() {
             mtime_secs: 5,
             ..CompareTolerance::default()
         },
-        false,
+        SymlinkPolicy::FollowInTreeOnly,
         false,
         &mut cb,
     )
@@ -694,7 +694,7 @@ fn rename_detection_reclassifies_only_a_only_b_pair() {
         true,
         vec![],
         CompareTolerance::default(),
-        false,
+        SymlinkPolicy::FollowInTreeOnly,
         true,
         &mut cb,
     )
@@ -716,6 +716,76 @@ fn rename_detection_reclassifies_only_a_only_b_pair() {
         .unwrap();
     assert_eq!(renamed.rename_from.as_deref(), Some("old-name.mov"));
     assert_eq!(renamed.rename_to.as_deref(), Some("new-name.mov"));
+}
+
+#[test]
+fn report_txt_includes_rename_destination() {
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("old-name.mov"), "samebytes");
+    write(&b.path().join("new-name.mov"), "samebytes");
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeChecksum,
+        true,
+        vec![],
+        CompareTolerance::default(),
+        SymlinkPolicy::FollowInTreeOnly,
+        true,
+        &mut cb,
+    )
+    .unwrap();
+
+    let txt = report_txt(&report, "TEST");
+    let renamed_line = txt
+        .lines()
+        .find(|line| line.starts_with("Renamed\t"))
+        .expect("expected a Renamed line in the text report");
+    assert!(
+        renamed_line.contains("→ new-name.mov"),
+        "expected rename destination in line, got: {renamed_line:?}"
+    );
+}
+
+#[test]
+fn report_csv_includes_rename_from_and_rename_to_columns() {
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("old-name.mov"), "samebytes");
+    write(&b.path().join("new-name.mov"), "samebytes");
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeChecksum,
+        true,
+        vec![],
+        CompareTolerance::default(),
+        SymlinkPolicy::FollowInTreeOnly,
+        true,
+        &mut cb,
+    )
+    .unwrap();
+
+    let csv = report_csv(&report);
+    let header = csv.lines().next().unwrap();
+    assert!(
+        header.contains("rename_from") && header.contains("rename_to"),
+        "expected rename_from and rename_to in CSV header, got: {header:?}"
+    );
+    let renamed_row = csv
+        .lines()
+        .skip(1)
+        .find(|line| line.starts_with("\"Renamed\""))
+        .expect("expected a Renamed CSV row");
+    assert!(
+        renamed_row.contains("\"old-name.mov\"") && renamed_row.contains("\"new-name.mov\""),
+        "expected rename_from and rename_to populated in row, got: {renamed_row}"
+    );
 }
 
 #[test]

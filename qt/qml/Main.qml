@@ -373,38 +373,24 @@ ApplicationWindow {
                         }
                     }
 
-                    CheckBox {
-                        id: followSymlinksCheck
-                        text: qsTr("Follow symlinks")
-                        checked: folderController.followSymlinks
+                    // Symlink policy replaces the old on/off checkbox. The four
+                    // policies map to the SfcSymlinkPolicy enum:
+                    //   0 = Ignore              (default for non-archive folders)
+                    //   1 = Follow in tree only (default; matches the README)
+                    //   2 = Follow all          (resolves out-of-tree targets)
+                    //   3 = Preserve as link    (records the symlink as-is)
+                    ComboBox {
+                        id: symlinkPolicyCombo
+                        model: [
+                            qsTr("Ignore symlinks"),
+                            qsTr("Follow in tree only"),
+                            qsTr("Follow all"),
+                            qsTr("Preserve as link")
+                        ]
+                        currentIndex: folderController.symlinkPolicy
                         enabled: !folderController.busy
-                        onToggled: folderController.followSymlinks = checked
-
-                        contentItem: Text {
-                            text: followSymlinksCheck.text
-                            color: colors.text
-                            font.pixelSize: 13
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: followSymlinksCheck.indicator.width + followSymlinksCheck.spacing
-                        }
-
-                        indicator: Rectangle {
-                            implicitWidth: 18
-                            implicitHeight: 18
-                            x: followSymlinksCheck.leftPadding
-                            y: parent.height / 2 - height / 2
-                            radius: 3
-                            color: followSymlinksCheck.checked ? colors.accent : colors.panelAlt
-                            border.color: colors.line
-                            border.width: 1
-                            Text {
-                                visible: followSymlinksCheck.checked
-                                anchors.centerIn: parent
-                                text: "\u2713"
-                                color: "#fff"
-                                font.pixelSize: 12
-                            }
-                        }
+                        onActivated: folderController.symlinkPolicy = currentIndex
+                        Layout.preferredWidth: 220
                     }
 
                     CheckBox {
@@ -797,24 +783,38 @@ ApplicationWindow {
                             ToolTip.visible: hovered && !enabled
                             ToolTip.text: "Copy selected items from A to B, then delete originals"
                         }
-                        Button {
+                        // Replaces the legacy Undo button: the right-hand
+                        // area now hosts a context-aware label that either
+                        // offers Undo (for copy ops) or explains why no
+                        // undo is available (for move ops). The label stays
+                        // visible at all times so the user gets feedback.
+                        Rectangle {
                             Layout.fillWidth: true
-                            text: "Undo"
-                            enabled: folderController.canUndo
-                            onClicked: folderController.undoLastTransfer()
-                            background: Rectangle {
-                                radius: 5
-                                color: parent.enabled ? colors.panelAlt : colors.bg
-                                border.color: parent.enabled ? colors.line : colors.bg
-                                border.width: 1
-                            }
-                            contentItem: Text {
-                                text: parent.text
-                                color: parent.enabled ? colors.text : colors.faint
+                            Layout.fillHeight: true
+                            radius: 5
+                            color: folderController.canUndo
+                                ? colors.accent
+                                : (folderController.lastOpWasMove ? colors.warn : colors.bg)
+                            border.color: colors.line
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12
-                                font.family: window.monoFont
+                                wrapMode: Text.Wrap
+                                text: folderController.canUndo
+                                    ? qsTr("Undo last copy")
+                                    : (folderController.lastOpWasMove
+                                        ? qsTr("Move complete — undo not supported yet")
+                                        : qsTr("No transfers to undo"))
+                                color: folderController.canUndo ? "#fff" : colors.faint
+                                font.pixelSize: 11
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: folderController.canUndo
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: folderController.undoLastTransfer()
                             }
                         }
                     }
@@ -1188,6 +1188,20 @@ ApplicationWindow {
             text: qsTr("Move to B") + " \u25B6"
             enabled: folderController.canMoveToB
             onTriggered: folderController.moveSelectedToB()
+        }
+        MenuSeparator {}
+        // Force-copy entries overwrite identical (Matching) files. They are
+        // off when no matching row is selected to avoid accidental mass
+        // overwrites — the user has to come here explicitly.
+        MenuItem {
+            text: "\u26A0 " + qsTr("Force copy to A")
+            enabled: folderController.canCopyToA
+            onTriggered: folderController.forceCopySelectedToA()
+        }
+        MenuItem {
+            text: qsTr("Force copy to B") + " \u26A0"
+            enabled: folderController.canCopyToB
+            onTriggered: folderController.forceCopySelectedToB()
         }
         MenuSeparator {}
         MenuItem {

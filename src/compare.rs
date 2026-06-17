@@ -744,7 +744,7 @@ pub fn compare_folders(
         ignore_hidden_system,
         ignore_patterns,
         CompareTolerance::default(),
-        false,
+        SymlinkPolicy::FollowInTreeOnly,
         false,
         &mut callbacks,
     )
@@ -758,7 +758,7 @@ pub fn compare_folders_with_progress(
     ignore_hidden_system: bool,
     ignore_patterns: Vec<String>,
     tolerance: CompareTolerance,
-    follow_symlinks: bool,
+    symlink_policy: SymlinkPolicy,
     detect_renames_pass: bool,
     callbacks: &mut ProgressCallbacks<'_>,
 ) -> Result<CompareReport> {
@@ -771,11 +771,6 @@ pub fn compare_folders_with_progress(
         mode,
         CompareMode::MediaMetadata | CompareMode::PerceptualHash
     );
-    let symlink_policy = if follow_symlinks {
-        SymlinkPolicy::FollowInTreeOnly
-    } else {
-        SymlinkPolicy::Ignore
-    };
     let options = ScanOptions {
         ignore_hidden_system,
         ignore_patterns,

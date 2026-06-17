@@ -11,6 +11,13 @@
 extern "C" {
 #endif
 
+typedef enum SfcSymlinkPolicy {
+    SFC_SYMLINK_IGNORE = 0,
+    SFC_SYMLINK_FOLLOW_IN_TREE_ONLY = 1,
+    SFC_SYMLINK_FOLLOW_ALL = 2,
+    SFC_SYMLINK_PRESERVE = 3
+} SfcSymlinkPolicy;
+
 typedef enum SfcCompareMode {
     SFC_COMPARE_PATH_SIZE = 0,
     SFC_COMPARE_PATH_SIZE_MODIFIED = 1,
@@ -101,6 +108,7 @@ typedef struct SfcCompareRequest {
     uint32_t tolerance_phash_hamming;
     bool follow_symlinks;
     bool detect_renames;
+    SfcSymlinkPolicy symlink_policy;
 } SfcCompareRequest;
 
 SfcReport *sfc_compare_folders(const SfcCompareRequest *request, char **error_out);

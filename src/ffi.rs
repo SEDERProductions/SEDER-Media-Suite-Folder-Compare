@@ -25,6 +25,15 @@ pub enum SfcCompareMode {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+pub enum SfcSymlinkPolicy {
+    Ignore = 0,
+    FollowInTreeOnly = 1,
+    FollowAll = 2,
+    Preserve = 3,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub enum SfcFileStatus {
     Matching = 0,
     Changed = 1,
@@ -73,6 +82,7 @@ pub struct SfcCompareRequest {
     pub tolerance_phash_hamming: u32,
     pub follow_symlinks: bool,
     pub detect_renames: bool,
+    pub symlink_policy: SfcSymlinkPolicy,
 }
 
 #[repr(C)]
@@ -111,6 +121,28 @@ fn compare_mode_from_ffi(mode: SfcCompareMode) -> CompareMode {
         SfcCompareMode::PathSizeChecksum => CompareMode::PathSizeChecksum,
         SfcCompareMode::MediaMetadata => CompareMode::MediaMetadata,
         SfcCompareMode::PerceptualHash => CompareMode::PerceptualHash,
+    }
+}
+
+/// Map the FFI symlink policy enum to the Rust-level policy. The
+/// `legacy_follow` boolean is honored when the policy field is `Ignore` so
+/// existing callers that only set `follow_symlinks=true` keep working.
+fn symlink_policy_from_ffi(
+    policy: SfcSymlinkPolicy,
+    legacy_follow: bool,
+) -> crate::compare::SymlinkPolicy {
+    use crate::compare::SymlinkPolicy as RustPolicy;
+    match policy {
+        SfcSymlinkPolicy::Ignore => {
+            if legacy_follow {
+                RustPolicy::FollowInTreeOnly
+            } else {
+                RustPolicy::Ignore
+            }
+        }
+        SfcSymlinkPolicy::FollowInTreeOnly => RustPolicy::FollowInTreeOnly,
+        SfcSymlinkPolicy::FollowAll => RustPolicy::FollowAll,
+        SfcSymlinkPolicy::Preserve => RustPolicy::PreserveAsLink,
     }
 }
 
@@ -302,7 +334,7 @@ pub unsafe extern "C" fn sfc_compare_folders(
         request.ignore_hidden_system,
         vec![ignore_patterns],
         tolerance,
-        request.follow_symlinks,
+        symlink_policy_from_ffi(request.symlink_policy, request.follow_symlinks),
         request.detect_renames,
         &mut callbacks,
     ) {
