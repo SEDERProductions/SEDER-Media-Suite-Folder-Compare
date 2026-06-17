@@ -5,6 +5,7 @@
 /build/
 /qt/build/
 /cmake-build-*/
+/6.5.3/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
