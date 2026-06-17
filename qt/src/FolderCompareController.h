@@ -66,11 +66,14 @@ class FolderCompareController final : public QObject {
     Q_PROPERTY(bool canMoveToA READ canMoveToA NOTIFY selectionChanged)
     Q_PROPERTY(bool canMoveToB READ canMoveToB NOTIFY selectionChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoChanged)
+    Q_PROPERTY(bool lastOpWasMove READ lastOpWasMove NOTIFY undoChanged)
     Q_PROPERTY(bool transferBusy READ transferBusy NOTIFY transferBusyChanged)
     Q_PROPERTY(int transferCurrent READ transferCurrent NOTIFY transferProgressChanged)
     Q_PROPERTY(int transferTotal READ transferTotal NOTIFY transferProgressChanged)
     Q_PROPERTY(bool followSymlinks READ followSymlinks WRITE setFollowSymlinks NOTIFY
                    followSymlinksChanged)
+    Q_PROPERTY(int symlinkPolicy READ symlinkPolicy WRITE setSymlinkPolicy NOTIFY
+                   symlinkPolicyChanged)
     Q_PROPERTY(
         bool detectRenames READ detectRenames WRITE setDetectRenames NOTIFY detectRenamesChanged)
     Q_PROPERTY(QString etaText READ etaText NOTIFY progressChanged)
@@ -113,11 +116,13 @@ class FolderCompareController final : public QObject {
     bool canMoveToA() const;
     bool canMoveToB() const;
     bool canUndo() const;
+    bool lastOpWasMove() const;
     bool transferBusy() const;
     int transferCurrent() const;
     int transferTotal() const;
     bool followSymlinks() const;
     bool detectRenames() const;
+    int symlinkPolicy() const;
     QString etaText() const;
     QStringList recentFoldersA() const;
     QStringList recentFoldersB() const;
@@ -130,6 +135,7 @@ class FolderCompareController final : public QObject {
     void setIgnorePatterns(const QString& patterns);
     void setTheme(const QString& theme);
     void setFollowSymlinks(bool follow);
+    void setSymlinkPolicy(int policy);
     void setDetectRenames(bool detect);
 
     Q_INVOKABLE void useRecentFolderA(const QString& path);
@@ -156,6 +162,8 @@ class FolderCompareController final : public QObject {
     Q_INVOKABLE void copySelectedToB();
     Q_INVOKABLE void moveSelectedToA();
     Q_INVOKABLE void moveSelectedToB();
+    Q_INVOKABLE void forceCopySelectedToA();
+    Q_INVOKABLE void forceCopySelectedToB();
     Q_INVOKABLE void confirmOverwrite(const QString& response);
     Q_INVOKABLE void undoLastTransfer();
     Q_INVOKABLE QVariantList buildComparisonTree() const;
@@ -199,6 +207,7 @@ class FolderCompareController final : public QObject {
     void overwriteNeeded(QVariantMap fileInfo);
     void transferOperationFinished(int succeeded, int failed);
     void followSymlinksChanged();
+    void symlinkPolicyChanged();
     void detectRenamesChanged();
     void recentFoldersChanged();
 
@@ -228,6 +237,7 @@ class FolderCompareController final : public QObject {
 
     // Transfer
     void buildTransferQueue(int direction, bool isMove);
+    void buildTransferQueueInternal(int direction, bool isMove, bool allowMatching);
     void startNextTransfer();
     void proceedWithTransfer();
     void finishBatch();
@@ -285,6 +295,7 @@ class FolderCompareController final : public QObject {
 
     // Bucket A/B options surfaced to the UI.
     bool m_followSymlinks = false;
+    int m_symlinkPolicy = 1; // SFC_SYMLINK_FOLLOW_IN_TREE_ONLY
     bool m_detectRenames = false;
     int m_renamedCount = 0;
 

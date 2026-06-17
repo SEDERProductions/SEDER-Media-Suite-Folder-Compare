@@ -35,6 +35,7 @@ void FolderCompareWorker::run() {
     request.tolerance_phash_hamming = m_options.tolerancePhashHamming;
     request.follow_symlinks = m_options.followSymlinks;
     request.detect_renames = m_options.detectRenames;
+    request.symlink_policy = static_cast<SfcSymlinkPolicy>(m_options.symlinkPolicy);
 
     char* error = nullptr;
     SfcReport* report = sfc_compare_folders(&request, &error);

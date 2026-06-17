@@ -16,6 +16,7 @@ struct CompareOptions {
     quint32 tolerancePhashHamming = 6;
     bool followSymlinks = false;
     bool detectRenames = false;
+    int symlinkPolicy = 1; // SFC_SYMLINK_FOLLOW_IN_TREE_ONLY
 };
 
 class FolderCompareWorker final : public QObject {

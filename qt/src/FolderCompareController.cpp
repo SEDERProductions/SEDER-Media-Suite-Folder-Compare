@@ -23,6 +23,11 @@
 namespace {
 constexpr auto defaultPatterns = ".DS_Store, Thumbs.db, desktop.ini, .Spotlight-V100, .Trashes";
 constexpr auto reportTitle = "SEDER Media Suite Folder Compare Report";
+// Maximum time we wait for a comparison or transfer worker to observe the
+// cancel flag and unwind on its own before quitting the app. The Rust core
+// checks cancellation between every directory entry and every 64 KB checksum
+// chunk, so this is an upper bound for very large files / trees.
+constexpr int kWorkerShutdownMs = 30000;
 
 template <typename T, typename ChangedSignal>
 bool assignPropertyIfChanged(T& current, const T& next, ChangedSignal changedSignal,
@@ -59,6 +64,11 @@ FolderCompareController::FolderCompareController(QObject* parent)
             .toString();
     m_ignoreHiddenSystem = settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool();
     m_followSymlinks = settings.value(QStringLiteral("followSymlinks"), false).toBool();
+    // SFC_SYMLINK_FOLLOW_IN_TREE_ONLY = 1 is the documented default in the README.
+    m_symlinkPolicy = settings.value(QStringLiteral("symlinkPolicy"), 1).toInt();
+    if (m_symlinkPolicy < 0 || m_symlinkPolicy > 3) {
+        m_symlinkPolicy = 1;
+    }
     m_detectRenames = settings.value(QStringLiteral("detectRenames"), false).toBool();
     loadRecentFolders();
     m_filterModel.setSourceModel(&m_tableModel);
@@ -79,20 +89,21 @@ FolderCompareController::~FolderCompareController() {
     }
     if (m_thread) {
         m_thread->quit();
-        if (!m_thread->wait(30000)) {
-            m_thread->terminate();
-            m_thread->wait();
-        }
+        // Cooperative shutdown only. We deliberately do NOT call
+        // QThread::terminate(): Qt's docs warn that it can leave OS
+        // resources (mutexes, file descriptors) in an inconsistent state.
+        // The worker checks the cancel flag between every operation, so
+        // it will unwind on its own. If we hit the timeout we still
+        // block on wait() to avoid tearing down the app mid-operation.
+        m_thread->wait(kWorkerShutdownMs);
     }
     if (m_transferWorker) {
         m_transferWorker->cancel();
     }
     if (m_transferThread) {
         m_transferThread->quit();
-        if (!m_transferThread->wait(30000)) {
-            m_transferThread->terminate();
-            m_transferThread->wait();
-        }
+        // Same cooperative-shutdown rationale as the comparison thread.
+        m_transferThread->wait(kWorkerShutdownMs);
     }
     if (m_report) {
         sfc_report_free(m_report);
@@ -199,6 +210,9 @@ void FolderCompareController::setMode(int mode) {
 bool FolderCompareController::followSymlinks() const {
     return m_followSymlinks;
 }
+int FolderCompareController::symlinkPolicy() const {
+    return m_symlinkPolicy;
+}
 bool FolderCompareController::detectRenames() const {
     return m_detectRenames;
 }
@@ -217,12 +231,24 @@ void FolderCompareController::setFollowSymlinks(bool follow) {
                                       &FolderCompareController::followSymlinksChanged, this);
 }
 
+void FolderCompareController::setSymlinkPolicy(int policy) {
+    // Clamp to the valid enum range [0..3]. Out-of-range values would silently
+    // resolve to FollowInTreeOnly inside the worker, so reject at the property
+    // boundary instead and let the UI re-bind.
+    const int clamped = policy < 0 ? 0 : (policy > 3 ? 3 : policy);
+    assignAndPersistPropertyIfChanged(m_symlinkPolicy, clamped, QStringLiteral("symlinkPolicy"),
+                                      &FolderCompareController::symlinkPolicyChanged, this);
+}
+
 void FolderCompareController::setDetectRenames(bool detect) {
     assignAndPersistPropertyIfChanged(m_detectRenames, detect, QStringLiteral("detectRenames"),
                                       &FolderCompareController::detectRenamesChanged, this);
 }
 
 QString FolderCompareController::etaText() const {
+    // ETA is computed only for the transfer phase. Scan/checksum stages emit
+    // progress without a known total duration so we cannot estimate a finish
+    // time for them — emitting a placeholder would be misleading.
     if (m_etaSamples.size() < 2 || m_lastBytesTotal == 0 || m_lastBytesDone >= m_lastBytesTotal) {
         return {};
     }
@@ -359,6 +385,7 @@ void FolderCompareController::startComparison() {
     CompareOptions options;
     options.followSymlinks = m_followSymlinks;
     options.detectRenames = m_detectRenames;
+    options.symlinkPolicy = m_symlinkPolicy;
     auto* worker = new FolderCompareWorker(m_folderA, m_folderB, m_mode, m_ignoreHiddenSystem,
                                            m_ignorePatterns, options);
     worker->moveToThread(thread);
@@ -749,13 +776,16 @@ bool FolderCompareController::canTransferInDirection(int direction) const {
     for (int row : m_selectedRows) {
         const int status = m_tableModel.statusForSourceRow(row);
         if (direction == 1) {
+            // Matching rows are NOT included by default; the user must opt
+            // into "Force copy" via the dedicated invokable to overwrite
+            // identical content.
             if (!(status == CompareRow::OnlyInA || status == CompareRow::Changed ||
-                  status == CompareRow::Matching || status == CompareRow::FolderOnlyInA)) {
+                  status == CompareRow::FolderOnlyInA)) {
                 return false;
             }
         } else {
             if (!(status == CompareRow::OnlyInB || status == CompareRow::Changed ||
-                  status == CompareRow::Matching || status == CompareRow::FolderOnlyInB)) {
+                  status == CompareRow::FolderOnlyInB)) {
                 return false;
             }
         }
@@ -807,7 +837,18 @@ bool FolderCompareController::canMoveToB() const {
 }
 
 bool FolderCompareController::canUndo() const {
-    return !m_undoStack.isEmpty() && !m_transferBusy;
+    // Move undo is not implemented, so we hide the button after a move. The
+    // QML uses `lastOpWasMove` to switch to an informational label; the
+    // underlying stack still holds the move entry in case undo support is
+    // added later.
+    if (m_undoStack.isEmpty() || m_transferBusy) {
+        return false;
+    }
+    return !m_undoStack.first().wasMove;
+}
+
+bool FolderCompareController::lastOpWasMove() const {
+    return !m_undoStack.isEmpty() && m_undoStack.first().wasMove;
 }
 
 bool FolderCompareController::transferBusy() const {
@@ -835,20 +876,26 @@ QString FolderCompareController::destPath(int direction, const QString& relPath)
 }
 
 void FolderCompareController::buildTransferQueue(int direction, bool isMove) {
+    // Default: skip Matching rows. Callers that want to overwrite identical
+    // files (e.g. "Force copy to B" after a destructive operation on A)
+    // should set `allowMatching` explicitly via the dedicated invokables.
+    buildTransferQueueInternal(direction, isMove, false);
+}
+
+void FolderCompareController::buildTransferQueueInternal(int direction, bool isMove,
+                                                          bool allowMatching) {
     m_transferQueue.clear();
     for (int row : m_selectedRows) {
         const int status = m_tableModel.statusForSourceRow(row);
         const bool isFolder = m_tableModel.isFolderRow(row);
         const QString relPath = m_tableModel.relativePathForRow(row);
 
-        bool valid = false;
-        if (direction == 1) {
-            valid = (status == CompareRow::OnlyInA || status == CompareRow::Changed ||
-                     status == CompareRow::Matching || status == CompareRow::FolderOnlyInA);
-        } else {
-            valid = (status == CompareRow::OnlyInB || status == CompareRow::Changed ||
-                     status == CompareRow::Matching || status == CompareRow::FolderOnlyInB);
-        }
+        const bool isMissingOnDest = direction == 1
+            ? (status == CompareRow::OnlyInA || status == CompareRow::FolderOnlyInA)
+            : (status == CompareRow::OnlyInB || status == CompareRow::FolderOnlyInB);
+        const bool changed = (status == CompareRow::Changed);
+        const bool matching = (status == CompareRow::Matching);
+        const bool valid = isMissingOnDest || changed || (allowMatching && matching);
         if (valid) {
             m_transferQueue.append({relPath, status, isFolder, direction, isMove});
         }
@@ -892,6 +939,26 @@ void FolderCompareController::moveSelectedToB() {
     m_batchOverwriteState = OverwriteBatchState::NotSet;
     setTransferProgress(0, m_transferQueue.size());
     addLog(QStringLiteral("Move to B: %1 items").arg(m_transferQueue.size()));
+    startNextTransfer();
+}
+
+void FolderCompareController::forceCopySelectedToA() {
+    buildTransferQueueInternal(0, /*isMove=*/false, /*allowMatching=*/true);
+    m_transferSucceeded = 0;
+    m_transferFailed = 0;
+    m_batchOverwriteState = OverwriteBatchState::NotSet;
+    setTransferProgress(0, m_transferQueue.size());
+    addLog(QStringLiteral("Force copy to A: %1 items").arg(m_transferQueue.size()));
+    startNextTransfer();
+}
+
+void FolderCompareController::forceCopySelectedToB() {
+    buildTransferQueueInternal(1, /*isMove=*/false, /*allowMatching=*/true);
+    m_transferSucceeded = 0;
+    m_transferFailed = 0;
+    m_batchOverwriteState = OverwriteBatchState::NotSet;
+    setTransferProgress(0, m_transferQueue.size());
+    addLog(QStringLiteral("Force copy to B: %1 items").arg(m_transferQueue.size()));
     startNextTransfer();
 }
 
@@ -1307,6 +1374,7 @@ void FolderCompareController::saveProfile(const QString& name) {
     settings.setValue(QStringLiteral("ignoreHiddenSystem"), m_ignoreHiddenSystem);
     settings.setValue(QStringLiteral("ignorePatterns"), m_ignorePatterns);
     settings.setValue(QStringLiteral("followSymlinks"), m_followSymlinks);
+    settings.setValue(QStringLiteral("symlinkPolicy"), m_symlinkPolicy);
     settings.setValue(QStringLiteral("detectRenames"), m_detectRenames);
     settings.endGroup();
     settings.endGroup();
@@ -1314,9 +1382,6 @@ void FolderCompareController::saveProfile(const QString& name) {
 }
 
 bool FolderCompareController::loadProfile(const QString& name) {
-    if (name.isEmpty()) {
-        return false;
-    }
     QSettings settings;
     settings.beginGroup(QStringLiteral("profiles"));
     if (!settings.childGroups().contains(name)) {
@@ -1331,6 +1396,7 @@ bool FolderCompareController::loadProfile(const QString& name) {
     setIgnoreHiddenSystem(settings.value(QStringLiteral("ignoreHiddenSystem"), true).toBool());
     setIgnorePatterns(settings.value(QStringLiteral("ignorePatterns")).toString());
     setFollowSymlinks(settings.value(QStringLiteral("followSymlinks"), false).toBool());
+    setSymlinkPolicy(settings.value(QStringLiteral("symlinkPolicy"), 1).toInt());
     setDetectRenames(settings.value(QStringLiteral("detectRenames"), false).toBool());
     settings.endGroup();
     settings.endGroup();

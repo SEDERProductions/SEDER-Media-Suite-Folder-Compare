@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use seder_folder_compare::{
     build_sync_plan, checksum_file, compare_folders_with_progress, execute_sync_plan, probe_media,
     report_csv, report_txt, write_text, ChecksumMethod, CompareMode, CompareTolerance,
-    ConflictStrategy, FileStatus, ProgressCallbacks, SyncMode, SyncOptions,
+    ConflictStrategy, FileStatus, ProgressCallbacks, SymlinkPolicy, SyncMode, SyncOptions,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -33,7 +33,7 @@ enum Command {
         folder_b: PathBuf,
         #[arg(long, value_enum, default_value_t = ModeArg::PathSize)]
         mode: ModeArg,
-        #[arg(long)]
+        #[arg(long, default_value_t = true)]
         ignore_hidden: bool,
         #[arg(long = "ignore", value_name = "PATTERN")]
         ignore: Vec<String>,
@@ -143,7 +143,8 @@ enum HashAlgo {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    match run(cli) {
+    let mut last_compare_mode: Option<CompareMode> = None;
+    match run(cli, &mut last_compare_mode) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("error: {e}");
@@ -152,7 +153,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli) -> anyhow::Result<ExitCode> {
+fn run(cli: Cli, last_compare_mode: &mut Option<CompareMode>) -> anyhow::Result<ExitCode> {
     match cli.command {
         Command::Compare {
             folder_a,
@@ -174,17 +175,24 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 phash_hamming: tolerance_phash,
             };
             let mut callbacks = ProgressCallbacks::default();
+            let resolved_mode: CompareMode = mode.into();
+            let resolved_policy: SymlinkPolicy = if follow_symlinks {
+                SymlinkPolicy::FollowInTreeOnly
+            } else {
+                SymlinkPolicy::Ignore
+            };
             let report = compare_folders_with_progress(
                 &folder_a,
                 &folder_b,
-                mode.into(),
+                resolved_mode,
                 ignore_hidden,
                 ignore,
                 tolerance,
-                follow_symlinks,
+                resolved_policy,
                 detect_renames,
                 &mut callbacks,
             )?;
+            *last_compare_mode = Some(resolved_mode);
 
             let output = match format {
                 OutputFormat::Text => report_txt(&report, "SEDER Folder Compare"),
@@ -217,16 +225,24 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             dry_run,
             conflict,
         } => {
+            let compare_mode = match *last_compare_mode {
+                Some(m) => m,
+                None => {
+                    eprintln!(
+                        "note: no prior `compare` in this session; using PathSize for the sync comparison"
+                    );
+                    CompareMode::PathSize
+                }
+            };
             let mut callbacks = ProgressCallbacks::default();
-            // Sync needs a comparison first. Path+size is the cheapest mode.
             let report = compare_folders_with_progress(
                 &folder_a,
                 &folder_b,
-                CompareMode::PathSize,
+                compare_mode,
                 true,
                 vec![],
                 CompareTolerance::default(),
-                false,
+                SymlinkPolicy::FollowInTreeOnly,
                 false,
                 &mut callbacks,
             )?;

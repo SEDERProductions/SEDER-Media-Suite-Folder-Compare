@@ -108,10 +108,18 @@ pub fn report_txt(report: &CompareReport, title: &str) -> String {
             .size_b
             .map(|s| s.to_string())
             .unwrap_or_else(|| "—".to_string());
-        out.push_str(&format!(
-            "{}\t{}\t{}\t{}\n",
-            status, row.relative_path, size_a, size_b
-        ));
+        if row.status == FileStatus::Renamed {
+            let dest = row.rename_to.as_deref().unwrap_or("?");
+            out.push_str(&format!(
+                "{}\t{}\t{}\t{}\t→ {}\n",
+                status, row.relative_path, size_a, size_b, dest
+            ));
+        } else {
+            out.push_str(&format!(
+                "{}\t{}\t{}\t{}\n",
+                status, row.relative_path, size_a, size_b
+            ));
+        }
     }
     for folder in &report.folders_only_in_a {
         out.push_str(&format!("Folder only in A\t{folder}\n"));
@@ -128,11 +136,13 @@ fn csv_cell(value: impl AsRef<str>) -> String {
 
 pub fn report_csv(report: &CompareReport) -> String {
     let mut out = String::from(
-        "\"status\",\"relative_path\",\"size_a\",\"size_b\",\"checksum_a\",\"checksum_b\"\n",
+        "\"status\",\"relative_path\",\"size_a\",\"size_b\",\"checksum_a\",\"checksum_b\",\"rename_from\",\"rename_to\"\n",
     );
     for row in &report.rows {
+        let rename_from = row.rename_from.clone().unwrap_or_default();
+        let rename_to = row.rename_to.clone().unwrap_or_default();
         out.push_str(&format!(
-            "{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{}\n",
             csv_cell(match row.status {
                 FileStatus::Matching => "Matching",
                 FileStatus::Changed => "Changed",
@@ -152,14 +162,18 @@ pub fn report_csv(report: &CompareReport) -> String {
                     .unwrap_or_default()
             ),
             csv_cell(row.checksum_a.clone().unwrap_or_default()),
-            csv_cell(row.checksum_b.clone().unwrap_or_default())
+            csv_cell(row.checksum_b.clone().unwrap_or_default()),
+            csv_cell(rename_from),
+            csv_cell(rename_to)
         ));
     }
     for folder in &report.folders_only_in_a {
         out.push_str(&format!(
-            "{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{}\n",
             csv_cell("FolderOnlyInA"),
             csv_cell(folder),
+            csv_cell(""),
+            csv_cell(""),
             csv_cell(""),
             csv_cell(""),
             csv_cell(""),
@@ -168,9 +182,11 @@ pub fn report_csv(report: &CompareReport) -> String {
     }
     for folder in &report.folders_only_in_b {
         out.push_str(&format!(
-            "{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{}\n",
             csv_cell("FolderOnlyInB"),
             csv_cell(folder),
+            csv_cell(""),
+            csv_cell(""),
             csv_cell(""),
             csv_cell(""),
             csv_cell(""),
