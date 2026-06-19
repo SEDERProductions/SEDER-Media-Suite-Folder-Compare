@@ -2,7 +2,17 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SederFolderCompareQt VERSION 0.2.1 LANGUAGES CXX)
+# Read the version from Cargo.toml so the Qt app and the Rust core can
+# never drift apart. The release workflow only bumps Cargo.toml; this
+# ensures CMake follows automatically.
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../Cargo.toml" _cargo_version_line REGEX "^version =")
+string(REGEX MATCH "\"([^\"]+)\"" _version_match "${_cargo_version_line}")
+if(NOT _version_match)
+    message(FATAL_ERROR "Could not extract version from Cargo.toml")
+endif()
+set(_cargo_version "${CMAKE_MATCH_1}")
+
+project(SederFolderCompareQt VERSION "${_cargo_version}" LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

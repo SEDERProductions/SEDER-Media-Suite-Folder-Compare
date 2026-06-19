@@ -1346,7 +1346,7 @@ void FolderCompareController::executeSyncPlan(bool dryRun) {
     // Reuse the options that produced the plan so the executor sees the same
     // propagate-deletes and conflict-strategy choices the user selected.
     const SfcConflictStrategy conflict =
-        m_lastSyncConflict; // captured by buildSyncPlan at plan time
+        static_cast<SfcConflictStrategy>(m_lastSyncConflict);
     const bool ok = sfc_sync_plan_execute(m_syncPlan, dryRun, m_lastSyncPropagateDeletes,
                                           conflict, nullptr, nullptr, nullptr, &error);
     const QString errorMessage = takeError(error);

@@ -893,10 +893,7 @@ fn sync_renamed_pair_produces_same_folder_rename_for_mirror_modes() {
     )
     .unwrap();
     assert!(
-        report
-            .rows
-            .iter()
-            .any(|r| r.status == FileStatus::Renamed),
+        report.rows.iter().any(|r| r.status == FileStatus::Renamed),
         "expected a Renamed row, got: {:?}",
         report.rows
     );
@@ -930,10 +927,7 @@ fn sync_renamed_pair_produces_same_folder_rename_for_mirror_modes() {
     assert!(b.path().join("old-name.mov").exists());
     assert!(!b.path().join("new-name.mov").exists());
     assert!(a.path().join("old-name.mov").exists());
-    assert_eq!(
-        fs::read(b.path().join("old-name.mov")).unwrap(),
-        b"abc"
-    );
+    assert_eq!(fs::read(b.path().join("old-name.mov")).unwrap(), b"abc");
 
     // Mirror B → A: now that A is "behind" (A has old-name, B has old-name),
     // make A look like B by renaming A/old-name.mov → A/new-name.mov.
@@ -980,13 +974,7 @@ fn sync_renamed_pair_is_skipped_for_two_way_modes() {
     .unwrap();
 
     for mode in [SyncMode::TwoWayNewerWins, SyncMode::TwoWayManual] {
-        let plan = build_plan(
-            &report,
-            a.path(),
-            b.path(),
-            mode,
-            &SyncOptions::default(),
-        );
+        let plan = build_plan(&report, a.path(), b.path(), mode, &SyncOptions::default());
         // detect_renames keeps the row with the lexicographically smaller
         // relative_path (the B-side row in this case, since "new-name.mov"
         // sorts before "old-name.mov").
