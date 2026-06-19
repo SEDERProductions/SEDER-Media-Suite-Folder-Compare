@@ -54,6 +54,10 @@ pub enum SyncActionKind {
     Delete,
     Rename,
     Skip,
+    /// Two-way conflict where the strategy is `AskUser`. The plan cannot
+    /// resolve this autonomously; the user must decide. The FFI surfaces
+    /// this as `SfcSyncActionKind::Ask = 4`.
+    Ask,
 }
 
 #[derive(Debug, Clone)]
@@ -166,9 +170,18 @@ fn plan_row(
         }),
         (SyncMode::TwoWayNewerWins, FileStatus::Changed) => {
             let (a_wins, reason) = match options.conflict_strategy {
-                ConflictStrategy::Skip | ConflictStrategy::AskUser => {
+                ConflictStrategy::Skip => {
                     return Some(SyncAction {
                         kind: SyncActionKind::Skip,
+                        source: path_a,
+                        dest: path_b,
+                        relative_path: rel.clone(),
+                        reason: "two-way conflict skipped".to_string(),
+                    })
+                }
+                ConflictStrategy::AskUser => {
+                    return Some(SyncAction {
+                        kind: SyncActionKind::Ask,
                         source: path_a,
                         dest: path_b,
                         relative_path: rel.clone(),
@@ -220,13 +233,27 @@ fn plan_row(
         (_, FileStatus::Renamed) => {
             let from = row.rename_from.clone().unwrap_or_else(|| rel.clone());
             let to = row.rename_to.clone().unwrap_or_else(|| rel.clone());
-            let source = match mode {
-                SyncMode::MirrorBToA => b.join(&to),
-                _ => a.join(&from),
-            };
-            let dest = match mode {
-                SyncMode::MirrorBToA => a.join(&from),
-                _ => b.join(&to),
+            // A rename detected by `detect_renames` is a pair of (OnlyInA,
+            // OnlyInB) rows: the file lives at `from` in A and at `to` in B.
+            // The right action depends on the sync mode:
+            //   - Mirror A→B: make B look like A. Rename B/to to B/from.
+            //   - Mirror B→A: make A look like B. Rename A/from to A/to.
+            //   - Two-way (newer/larger wins): no way to decide which name
+            //     is canonical, so the plan Skips the row and reports the
+            //     rename for the user to resolve manually.
+            //   - Two-way (manual): Skip is the documented behavior.
+            let (source, dest) = match mode {
+                SyncMode::MirrorAToB => (b.join(&to), b.join(&from)),
+                SyncMode::MirrorBToA => (a.join(&from), a.join(&to)),
+                SyncMode::TwoWayNewerWins | SyncMode::TwoWayManual => {
+                    return Some(SyncAction {
+                        kind: SyncActionKind::Skip,
+                        source: a.join(&from),
+                        dest: b.join(&to),
+                        relative_path: rel.clone(),
+                        reason: format!("rename needs manual resolution: {from} → {to}"),
+                    });
+                }
             };
             Some(SyncAction {
                 kind: SyncActionKind::Rename,
@@ -309,7 +336,7 @@ pub fn execute_plan(
                     )
                 })?;
             }
-            SyncActionKind::Skip => {}
+            SyncActionKind::Skip | SyncActionKind::Ask => {}
         }
     }
     callbacks.emit(ProgressEvent::new(

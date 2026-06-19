@@ -52,7 +52,8 @@ typedef enum SfcSyncActionKind {
     SFC_ACTION_COPY = 0,
     SFC_ACTION_DELETE = 1,
     SFC_ACTION_RENAME = 2,
-    SFC_ACTION_SKIP = 3
+    SFC_ACTION_SKIP = 3,
+    SFC_ACTION_ASK = 4
 } SfcSyncActionKind;
 
 typedef enum SfcDiffLineKind {
@@ -193,6 +194,8 @@ const char *sfc_sync_plan_action_reason(const SfcSyncPlan *plan, size_t index);
 bool sfc_sync_plan_execute(
     const SfcSyncPlan *plan,
     bool dry_run,
+    bool propagate_deletes,
+    SfcConflictStrategy conflict,
     SfcProgressCallback progress,
     SfcCancelCallback cancel,
     void *user_data,

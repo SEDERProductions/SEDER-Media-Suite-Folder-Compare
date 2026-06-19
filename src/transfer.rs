@@ -5,8 +5,14 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicU64;
 use std::time::{SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
+
+/// Process-local counter used to disambiguate concurrent temp-file suffixes
+/// in `copy_file`. Combined with the wall-clock nanos and the PID, this
+/// makes name collisions effectively impossible.
+static COPY_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -45,14 +51,20 @@ pub fn copy_file(source: &Path, dest: &Path, callbacks: &mut ProgressCallbacks<'
 
     let dest_dir = dest.parent().unwrap_or_else(|| Path::new("."));
     let dest_name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("dest");
-    let unique = SystemTime::now()
+    // Combine wall-clock nanos with a process-local atomic counter. The
+    // fallback for `duration_since(UNIX_EPOCH)` is now the counter itself, not
+    // a stable `0` — two concurrent copies that both somehow see a pre-epoch
+    // clock can no longer collide on the same temp suffix.
+    let clock_nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
+    let counter = COPY_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let temp_path = dest_dir.join(format!(
-        ".{dest_name}.sfc.tmp.{}.{}",
+        ".{dest_name}.sfc.tmp.{}.{}.{}",
         std::process::id(),
-        unique
+        clock_nanos,
+        counter
     ));
 
     let mut dest_file = fs::File::create(&temp_path).with_context(|| {
@@ -124,19 +136,25 @@ pub fn copy_folder(
         anyhow::bail!("Source is not a directory: {}", source.display());
     }
 
-    let entries: Vec<_> = WalkDir::new(source)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.depth() > 0)
-        .collect();
-
     let source_root = source
         .canonicalize()
         .with_context(|| format!("Failed to resolve source root {}", source.display()))?;
 
-    let total = entries.len() as u64;
+    // Two-pass: first count entries (cheap, single readdir per directory), then
+    // walk the tree again to copy. This keeps memory bounded for very large
+    // trees instead of materializing every entry into a Vec.
+    let total = WalkDir::new(source)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.depth() > 0)
+        .count() as u64;
 
-    for (index, entry) in entries.iter().enumerate() {
+    for (index, entry) in WalkDir::new(source)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.depth() > 0)
+        .enumerate()
+    {
         callbacks.check_canceled()?;
 
         let rel = entry.path().strip_prefix(source).with_context(|| {

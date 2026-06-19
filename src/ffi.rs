@@ -888,6 +888,7 @@ pub enum SfcSyncActionKind {
     Delete = 1,
     Rename = 2,
     Skip = 3,
+    Ask = 4,
 }
 
 pub struct FfiSyncPlan {
@@ -922,6 +923,7 @@ fn action_kind_to_ffi(k: crate::sync::SyncActionKind) -> SfcSyncActionKind {
         crate::sync::SyncActionKind::Delete => SfcSyncActionKind::Delete,
         crate::sync::SyncActionKind::Rename => SfcSyncActionKind::Rename,
         crate::sync::SyncActionKind::Skip => SfcSyncActionKind::Skip,
+        crate::sync::SyncActionKind::Ask => SfcSyncActionKind::Ask,
     }
 }
 
@@ -1078,6 +1080,8 @@ pub unsafe extern "C" fn sfc_sync_plan_action_reason(
 pub unsafe extern "C" fn sfc_sync_plan_execute(
     plan: *const FfiSyncPlan,
     dry_run: bool,
+    propagate_deletes: bool,
+    conflict: SfcConflictStrategy,
     progress: SfcProgressCallback,
     cancel: SfcCancelCallback,
     user_data: *mut c_void,
@@ -1101,9 +1105,9 @@ pub unsafe extern "C" fn sfc_sync_plan_execute(
         cancel: Some(&cancel_callback),
     };
     let options = crate::sync::SyncOptions {
-        propagate_deletes: true,
+        propagate_deletes,
         dry_run,
-        conflict_strategy: crate::sync::ConflictStrategy::NewerWins,
+        conflict_strategy: conflict_from_ffi(conflict),
     };
     match crate::sync::execute_plan(&plan.plan, &options, &mut callbacks) {
         Ok(()) => true,

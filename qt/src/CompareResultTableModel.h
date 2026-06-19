@@ -13,8 +13,9 @@ struct CompareRow {
         Changed = 1,
         OnlyInA = 2,
         OnlyInB = 3,
-        FolderOnlyInA = 4,
-        FolderOnlyInB = 5
+        Renamed = 4,
+        FolderOnlyInA = 5,
+        FolderOnlyInB = 6
     };
 
     QString relativePath;

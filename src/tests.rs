@@ -637,6 +637,7 @@ fn copy_folder_rejects_broken_symlink_deterministically() {
 }
 
 #[test]
+#[cfg(unix)] // embedded double-quotes are illegal in Windows filenames
 fn csv_export_escapes_quotes_and_includes_folder_rows() {
     let a = tempdir().unwrap();
     let b = tempdir().unwrap();
@@ -863,6 +864,144 @@ fn sync_real_run_copies_files() {
     let mut cb = ProgressCallbacks::default();
     execute_plan(&plan, &options, &mut cb).unwrap();
     assert_eq!(fs::read(b.path().join("only-a.mov")).unwrap(), b"hello");
+}
+
+#[test]
+fn sync_renamed_pair_produces_same_folder_rename_for_mirror_modes() {
+    use crate::sync::{build_plan, execute_plan, SyncActionKind, SyncMode, SyncOptions};
+
+    // A: old-name.mov with "abc". B: new-name.mov with "abc". detect_renames
+    // will reclassify them as a single Renamed row (after dedup the b-side is
+    // dropped). Mirror A→B must rename B/new-name.mov to B/old-name.mov (not
+    // copy across folders, which would clobber A/old-name.mov).
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("old-name.mov"), "abc");
+    write(&b.path().join("new-name.mov"), "abc");
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeChecksum,
+        true,
+        vec![],
+        CompareTolerance::default(),
+        SymlinkPolicy::FollowInTreeOnly,
+        true,
+        &mut cb,
+    )
+    .unwrap();
+    assert!(
+        report
+            .rows
+            .iter()
+            .any(|r| r.status == FileStatus::Renamed),
+        "expected a Renamed row, got: {:?}",
+        report.rows
+    );
+
+    // Mirror A → B: rename B/new-name.mov → B/old-name.mov (intra-folder).
+    let plan = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::MirrorAToB,
+        &SyncOptions {
+            propagate_deletes: false,
+            ..SyncOptions::default()
+        },
+    );
+    let renamed = plan
+        .actions
+        .iter()
+        .find(|a| matches!(a.kind, SyncActionKind::Rename))
+        .expect("expected a Rename action in the MirrorAToB plan");
+    assert_eq!(renamed.source, b.path().join("new-name.mov"));
+    assert_eq!(renamed.dest, b.path().join("old-name.mov"));
+
+    let options = SyncOptions {
+        propagate_deletes: false,
+        dry_run: false,
+        ..SyncOptions::default()
+    };
+    let mut cb2 = ProgressCallbacks::default();
+    execute_plan(&plan, &options, &mut cb2).unwrap();
+    assert!(b.path().join("old-name.mov").exists());
+    assert!(!b.path().join("new-name.mov").exists());
+    assert!(a.path().join("old-name.mov").exists());
+    assert_eq!(
+        fs::read(b.path().join("old-name.mov")).unwrap(),
+        b"abc"
+    );
+
+    // Mirror B → A: now that A is "behind" (A has old-name, B has old-name),
+    // make A look like B by renaming A/old-name.mov → A/new-name.mov.
+    let plan = build_plan(
+        &report,
+        a.path(),
+        b.path(),
+        SyncMode::MirrorBToA,
+        &SyncOptions {
+            propagate_deletes: false,
+            ..SyncOptions::default()
+        },
+    );
+    let renamed = plan
+        .actions
+        .iter()
+        .find(|a| matches!(a.kind, SyncActionKind::Rename))
+        .expect("expected a Rename action in the MirrorBToA plan");
+    assert_eq!(renamed.source, a.path().join("old-name.mov"));
+    assert_eq!(renamed.dest, a.path().join("new-name.mov"));
+}
+
+#[test]
+fn sync_renamed_pair_is_skipped_for_two_way_modes() {
+    use crate::sync::{build_plan, SyncActionKind, SyncMode, SyncOptions};
+
+    let a = tempdir().unwrap();
+    let b = tempdir().unwrap();
+    write(&a.path().join("old-name.mov"), "abc");
+    write(&b.path().join("new-name.mov"), "abc");
+
+    let mut cb = ProgressCallbacks::default();
+    let report = compare_folders_with_progress(
+        a.path(),
+        b.path(),
+        CompareMode::PathSizeChecksum,
+        true,
+        vec![],
+        CompareTolerance::default(),
+        SymlinkPolicy::FollowInTreeOnly,
+        true,
+        &mut cb,
+    )
+    .unwrap();
+
+    for mode in [SyncMode::TwoWayNewerWins, SyncMode::TwoWayManual] {
+        let plan = build_plan(
+            &report,
+            a.path(),
+            b.path(),
+            mode,
+            &SyncOptions::default(),
+        );
+        // detect_renames keeps the row with the lexicographically smaller
+        // relative_path (the B-side row in this case, since "new-name.mov"
+        // sorts before "old-name.mov").
+        let renamed = plan
+            .actions
+            .iter()
+            .find(|a| a.relative_path == "new-name.mov")
+            .expect("expected a renamed action in the two-way plan");
+        assert!(
+            matches!(renamed.kind, SyncActionKind::Skip),
+            "mode {mode:?} should Skip the rename, got {:?}",
+            renamed.kind
+        );
+        assert!(renamed.reason.contains("rename needs manual resolution"));
+    }
 }
 
 #[test]

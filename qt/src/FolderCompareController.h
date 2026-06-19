@@ -317,4 +317,9 @@ class FolderCompareController final : public QObject {
 
     // Cached sync plan, owned, freed in destructor and on rebuild.
     struct SfcSyncPlan* m_syncPlan = nullptr;
+    // Snapshot of the options used to build the current plan, replayed by
+    // `executeSyncPlan` so the executor sees the same propagate-deletes and
+    // conflict-strategy the user picked.
+    bool m_lastSyncPropagateDeletes = true;
+    int m_lastSyncConflict = 0; // SfcConflictStrategy::NewerWins
 };

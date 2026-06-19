@@ -26,6 +26,8 @@ CompareRow::Status fromStatus(SfcFileStatus status) {
         return CompareRow::OnlyInA;
     case SFC_STATUS_ONLY_IN_B:
         return CompareRow::OnlyInB;
+    case SFC_STATUS_RENAMED:
+        return CompareRow::Renamed;
     }
     return CompareRow::Changed;
 }
@@ -40,6 +42,8 @@ QString statusLabel(int status) {
         return QStringLiteral("Only in A");
     case CompareRow::OnlyInB:
         return QStringLiteral("Only in B");
+    case CompareRow::Renamed:
+        return QStringLiteral("Renamed");
     case CompareRow::FolderOnlyInA:
         return QStringLiteral("Folder only in A");
     case CompareRow::FolderOnlyInB:

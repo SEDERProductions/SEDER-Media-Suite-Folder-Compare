@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SederFolderCompareQt VERSION 0.2.0 LANGUAGES CXX)
+project(SederFolderCompareQt VERSION 0.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,9 +23,13 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/lib.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/tests.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/compare.rs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/diff.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/ffi.rs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/media.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/report.rs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/sync.rs"
         "${CMAKE_CURRENT_SOURCE_DIR}/../src/transfer.rs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/bin/sfc.rs"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
     COMMENT "Building Rust Folder Compare core"
     VERBATIM

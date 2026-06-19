@@ -45,7 +45,8 @@ ApplicationWindow {
     function statusColor(statusCode) {
         if (statusCode === 0) return colors.good
         if (statusCode === 1) return colors.bad
-        if (statusCode === 2 || statusCode === 3) return colors.warn
+        if (statusCode === 2 || statusCode === 3 || statusCode === 4 ||
+            statusCode === 5 || statusCode === 6) return colors.warn
         return colors.faint
     }
 
@@ -54,7 +55,9 @@ ApplicationWindow {
         if (statusCode === 1) return "\u2717 Changed"
         if (statusCode === 2) return "\u25b8 Only A"
         if (statusCode === 3) return "\u25b8 Only B"
-        if (statusCode === 4) return "Folder"
+        if (statusCode === 4) return "\u21B7 Renamed"
+        if (statusCode === 5) return "Folder (A)"
+        if (statusCode === 6) return "Folder (B)"
         return "Unknown"
     }
 
@@ -918,8 +921,7 @@ ApplicationWindow {
                                                     var s = node.aggregateStatus !== undefined ? node.aggregateStatus : node.status
                                                     if (s === 0) return colors.good
                                                     if (s === 1) return colors.bad
-                                                    if (s === 2 || s === 4) return colors.warn
-                                                    if (s === 3 || s === 5) return "#a47a3a"
+                                                    if (s === 2 || s === 3 || s === 4 || s === 5 || s === 6) return colors.warn
                                                     return colors.faint
                                                 }
                                             }
@@ -965,8 +967,9 @@ ApplicationWindow {
                                                 if (s === 1) return "\u2717 Changed"
                                                 if (s === 2) return "\u25B8 Only A"
                                                 if (s === 3) return "\u25B8 Only B"
-                                                if (s === 4) return "Folder (A)"
-                                                if (s === 5) return "Folder (B)"
+                                                if (s === 4) return "\u21B7 Renamed"
+                                                if (s === 5) return "Folder (A)"
+                                                if (s === 6) return "Folder (B)"
                                                 return ""
                                             }
                                             color: {
@@ -994,8 +997,8 @@ ApplicationWindow {
                                         if (mouse.button === Qt.RightButton) {
                                             contextMenu.targetRelPath = node.relPath
                                             contextMenu.targetIsFolder = node.isFolder
-                                            contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4
-                                            contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4
+                                            contextMenu.targetHasA = node.status === 0 || node.status === 1 || node.status === 2 || node.status === 4 || node.status === 5
+                                            contextMenu.targetHasB = node.status === 0 || node.status === 1 || node.status === 3 || node.status === 4 || node.status === 6
                                             contextMenu.popup()
                                         }
                                     }
@@ -1382,7 +1385,7 @@ ApplicationWindow {
                             width: 60
                             verticalAlignment: Text.AlignVCenter
                             height: parent.height
-                            text: ["Copy", "Delete", "Rename", "Skip"][modelData.kind] || ""
+                            text: ["Copy", "Delete", "Rename", "Skip", "Ask"][modelData.kind] || ""
                             color: modelData.kind === 1 ? colors.bad : colors.text
                             font.family: window.monoFont
                             font.pixelSize: 11

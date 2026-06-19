@@ -776,9 +776,11 @@ bool FolderCompareController::canTransferInDirection(int direction) const {
     for (int row : m_selectedRows) {
         const int status = m_tableModel.statusForSourceRow(row);
         if (direction == 1) {
-            // Matching rows are NOT included by default; the user must opt
-            // into "Force copy" via the dedicated invokable to overwrite
-            // identical content.
+            // Matching and Renamed rows are NOT included by default; the user
+            // must opt into "Force copy" via the dedicated invokable to
+            // overwrite identical content. Renamed rows already exist in
+            // both folders (under different names) and have no canonical
+            // direction to copy to.
             if (!(status == CompareRow::OnlyInA || status == CompareRow::Changed ||
                   status == CompareRow::FolderOnlyInA)) {
                 return false;
@@ -803,7 +805,8 @@ bool FolderCompareController::canMoveInDirection(int direction) const {
             if (status == CompareRow::OnlyInA && !m_tableModel.isFolderRow(row)) {
                 continue;
             }
-            if (status == CompareRow::Changed || status == CompareRow::Matching) {
+            if (status == CompareRow::Changed || status == CompareRow::Matching ||
+                status == CompareRow::Renamed) {
                 continue;
             }
             return false;
@@ -811,7 +814,8 @@ bool FolderCompareController::canMoveInDirection(int direction) const {
             if (status == CompareRow::OnlyInB && !m_tableModel.isFolderRow(row)) {
                 continue;
             }
-            if (status == CompareRow::Changed || status == CompareRow::Matching) {
+            if (status == CompareRow::Changed || status == CompareRow::Matching ||
+                status == CompareRow::Renamed) {
                 continue;
             }
             return false;
@@ -1300,6 +1304,9 @@ QVariantList FolderCompareController::buildSyncPlan(int syncMode, bool propagate
         return result;
     }
     clearSyncPlan();
+    // Snapshot the options so executeSyncPlan can replay them.
+    m_lastSyncPropagateDeletes = propagateDeletes;
+    m_lastSyncConflict = conflict;
     const QByteArray folderA = m_folderA.toUtf8();
     const QByteArray folderB = m_folderB.toUtf8();
     char* error = nullptr;
@@ -1336,7 +1343,12 @@ void FolderCompareController::executeSyncPlan(bool dryRun) {
         return;
     }
     char* error = nullptr;
-    const bool ok = sfc_sync_plan_execute(m_syncPlan, dryRun, nullptr, nullptr, nullptr, &error);
+    // Reuse the options that produced the plan so the executor sees the same
+    // propagate-deletes and conflict-strategy choices the user selected.
+    const SfcConflictStrategy conflict =
+        m_lastSyncConflict; // captured by buildSyncPlan at plan time
+    const bool ok = sfc_sync_plan_execute(m_syncPlan, dryRun, m_lastSyncPropagateDeletes,
+                                          conflict, nullptr, nullptr, nullptr, &error);
     const QString errorMessage = takeError(error);
     if (!ok) {
         addLog(QStringLiteral("Sync execute failed: %1").arg(errorMessage), LogSeverity::Error);
